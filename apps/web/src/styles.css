@@ -2984,3 +2984,456 @@ nav button.active {
 .route {
   color: #635c74;
 }
+/* Minimal interface: actions and profile data, without decorative badges or marketing copy. */
+.welcome-hero {
+  display: block;
+  min-height: 0;
+  background: #fff;
+  border-color: var(--line);
+}
+.hero-copy {
+  padding: 32px;
+}
+.hero-copy h2 {
+  font-size: 24px;
+  letter-spacing: -0.5px;
+}
+.hero-copy > p {
+  margin: 8px 0 24px;
+  font-size: 13px;
+}
+.page-title {
+  margin-bottom: 24px;
+}
+.page-title h1 {
+  font-size: 28px;
+}
+.page-title p {
+  display: none;
+}
+.avatar-panel {
+  background: #fff;
+}
+.avatar-stage {
+  height: 265px;
+}
+.avatar-stage > img {
+  height: 265px;
+  width: 225px;
+}
+.avatar-sub:empty {
+  display: none;
+}
+.insight-title {
+  margin-bottom: 16px;
+}
+.insight-title h2 {
+  font-size: 17px;
+}
+.avatar-panel > h2 {
+  font-size: 21px;
+}
+.qualities-panel .score-list {
+  margin-top: 22px;
+}
+.profile-bottom {
+  justify-content: center;
+}
+.radar {
+  width: 220px;
+  max-width: 100%;
+}
+.recommendation {
+  padding: 22px;
+}
+.rec-head {
+  margin: 0 0 12px;
+}
+.pill.neutral,
+.count-badge {
+  background: none;
+  padding: 0;
+  color: var(--muted);
+}
+.rec-scale {
+  font-size: 11px;
+}
+.rec-footer {
+  margin-top: 20px;
+}
+.next-step {
+  padding: 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.next-step h2 {
+  font-size: 17px;
+  margin-bottom: 16px;
+}
+.explanation {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.explanation summary {
+  cursor: pointer;
+  min-height: 28px;
+  line-height: 28px;
+}
+.explanation p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.strong-use {
+  display: block;
+  background: none;
+  border: 1px solid var(--line);
+  padding: 12px 18px;
+}
+.disclaimer {
+  display: block;
+  padding: 0;
+  margin-top: 24px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.disclaimer summary {
+  cursor: pointer;
+  min-height: 32px;
+  line-height: 1.6;
+}
+.disclaimer p {
+  font-size: 11px;
+  max-width: 700px;
+  margin: 4px 0 0;
+}
+nav button {
+  gap: 0;
+}
+.logout {
+  font-size: 12px;
+}
+.sidebar-bottom {
+  padding-top: 20px;
+}
+.breadcrumb {
+  font-size: 12px;
+}
+.topbar .language,
+.topbar .top-divider {
+  display: none;
+}
+.demo-bar {
+  font-size: 11px;
+}
+.demo-bar .status-dot {
+  display: none;
+}
+.demo-bar label {
+  font-size: 11px;
+}
+.flow-steps {
+  display: none;
+}
+.flow-top {
+  margin-bottom: 24px;
+}
+.onboarding {
+  padding: 32px;
+  text-align: left;
+}
+.onboarding > p {
+  margin: 12px 0;
+  font-size: 13px;
+}
+.consent-details {
+  padding: 0;
+  background: none;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.consent-details summary {
+  cursor: pointer;
+  min-height: 32px;
+  line-height: 32px;
+}
+.consent-details p {
+  font-size: 12px;
+}
+.consent {
+  font-size: 12px;
+}
+.appearance h1,
+.onboarding h1,
+.tie-panel h1 {
+  font-size: 24px;
+}
+.appearance-count {
+  margin-bottom: 14px;
+}
+.option-card {
+  min-height: 64px;
+  padding: 18px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.option-card.selected {
+  padding: 17px 11px;
+}
+.option-card h3 {
+  font-size: 13px;
+}
+.gender-grid .option-card {
+  min-height: 64px;
+  justify-content: center;
+}
+.style-grid .option-card {
+  flex-direction: column;
+}
+.swatches {
+  margin: 0 0 14px;
+}
+.flow-buttons {
+  margin-top: 22px;
+}
+.question-area {
+  padding-top: 4px;
+}
+.question-area h1 {
+  font-size: 24px;
+}
+.question-progress {
+  margin-bottom: 28px;
+}
+.question-panel .flow-buttons {
+  margin-top: 0;
+}
+.question-meta {
+  font-size: 11px;
+}
+.sync-status {
+  font-size: 11px;
+}
+.pagination button {
+  font-size: 12px;
+  padding: 9px 14px;
+}
+.team-link {
+  border-top: 0;
+  margin-top: 14px;
+  padding-top: 0;
+}
+.user-info strong {
+  font-size: 12px;
+}
+.user-info small {
+  display: none;
+}
+.editor-row .user-list button {
+  padding: 14px 0;
+}
+@media (max-width: 900px) {
+  .app-shell {
+    display: block;
+  }
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    min-height: 70px;
+    padding: 14px 24px;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .main-shell {
+    margin-left: 0;
+  }
+  .brand {
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .brand > span:last-child {
+    display: block;
+  }
+  .brand strong {
+    font-size: 25px;
+  }
+  .brand small {
+    font-size: 7px;
+  }
+  .sidebar nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .sidebar nav button {
+    font-size: 12px;
+    padding: 10px 12px;
+    min-height: 40px;
+    white-space: nowrap;
+  }
+  .sidebar-bottom {
+    margin: 0;
+    padding: 0;
+  }
+  .logout {
+    font-size: 12px;
+    padding: 10px;
+  }
+  .topbar {
+    min-height: 58px;
+  }
+  .user-info {
+    display: block;
+  }
+  .result-grid {
+    grid-template-columns: 0.9fr 1.1fr;
+  }
+  .avatar-stage,
+  .avatar-stage > img {
+    height: 265px;
+  }
+  .avatar-stage > img {
+    width: 225px;
+  }
+}
+@media (max-width: 640px) {
+  .sidebar {
+    padding: 12px 18px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .brand-badge {
+    width: 30px;
+    height: 30px;
+    font-size: 20px;
+  }
+  .brand strong {
+    font-size: 23px;
+  }
+  .brand small {
+    display: none;
+  }
+  .sidebar nav {
+    gap: 4px;
+  }
+  .sidebar nav button {
+    font-size: 11px;
+    padding: 9px 10px;
+  }
+  .logout {
+    font-size: 11px;
+    padding: 9px 0;
+  }
+  .topbar {
+    padding: 0 18px;
+    min-height: 54px;
+  }
+  .breadcrumb {
+    font-size: 11px;
+  }
+  .user-info strong {
+    font-size: 11px;
+  }
+  .demo-bar {
+    font-size: 10px;
+  }
+  .content {
+    padding: 25px 18px;
+  }
+  .page-title h1 {
+    font-size: 26px;
+  }
+  .welcome-hero .hero-copy {
+    padding: 27px;
+  }
+  .hero-copy h2 {
+    font-size: 23px;
+  }
+  .hero-copy > p {
+    font-size: 12px;
+  }
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+  .avatar-panel {
+    padding: 22px;
+  }
+  .avatar-stage,
+  .avatar-stage > img {
+    height: 245px;
+  }
+  .avatar-stage > img {
+    width: 205px;
+  }
+  .onboarding {
+    padding: 26px 22px;
+  }
+  .onboarding h1,
+  .appearance h1,
+  .tie-panel h1 {
+    font-size: 23px;
+  }
+  .onboarding > p {
+    font-size: 12px;
+  }
+  .option-card {
+    min-height: 62px;
+  }
+  .question-area h1 {
+    font-size: 20px;
+  }
+  .flow-progress-text {
+    font-size: 10px;
+  }
+  .question-meta,
+  .sync-status {
+    font-size: 10px;
+  }
+  .disclaimer p {
+    font-size: 11px;
+  }
+  .next-step {
+    padding: 22px;
+  }
+  .qualities-panel .panel-top h2 {
+    font-size: 18px;
+  }
+}
+.topbar {
+  justify-content: flex-end;
+}
+.interpretation > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 12px;
+}
+.interpretation > summary span:last-child {
+  color: var(--muted);
+  font-size: 11px;
+}
+.rec-copy {
+  margin-top: 0;
+}
+.rec-copy > summary {
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.6;
+}
+.disclaimer summary {
+  font-size: 11px;
+}
+.team-avatar:empty {
+  display: none;
+}

@@ -1,4 +1,4 @@
-import { ChevronRight, RefreshCw, Save } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import type { User } from '../../../api/src/store';
 import { api } from '../api';
@@ -43,12 +43,7 @@ export default function Admin() {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">{t('text225')}</div>
-          <h1>
-            {t('text226')}
-            <span className="heading-dot">.</span>
-          </h1>
-          <p>{t('text227')}</p>
+          <h1>{t('text226')}</h1>
         </div>
       </div>
       {error && (
@@ -75,7 +70,6 @@ export default function Admin() {
                   })
                 }
               >
-                <span className="user-circle">{u.name[0]}</span>
                 <span>
                   <strong>{u.name}</strong>
                   <small>
@@ -130,7 +124,6 @@ export default function Admin() {
             </select>
           </label>
           <button className="button primary" type="submit">
-            <Save size={17} />
             {t('text240')}
           </button>
         </form>
@@ -139,7 +132,6 @@ export default function Admin() {
         <div className="panel-top">
           <h2>{t('text241')}</h2>
           <button className="text-button" onClick={() => void load()}>
-            <RefreshCw size={16} />
             {t('text242')}
           </button>
         </div>

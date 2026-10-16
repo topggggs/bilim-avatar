@@ -1,17 +1,4 @@
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowUpRight,
-  BookOpen,
-  ChevronRight,
-  Compass,
-  LayoutDashboard,
-  LogOut,
-  Settings,
-  Users,
-  WifiOff,
-  X,
-} from 'lucide-react';
+import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { scaleIds, type TestConfig } from '../../../packages/core/src/index';
 import type { Session, User } from '../../api/src/store';
@@ -21,7 +8,7 @@ import Admin from './pages/Admin';
 import Methodology from './pages/Methodology';
 import Profile from './pages/Profile';
 import TestFlow from './pages/TestFlow';
-import { Disclaimer, placeholder, readDraft, type Draft, type Portrait } from './shared';
+import { Disclaimer, readDraft, type Draft, type Portrait } from './shared';
 export default function App() {
   const [user, setUser] = useState<User | null>(null),
     [demo, setDemo] = useState(false),
@@ -160,7 +147,6 @@ export default function App() {
         <p>{error || t('text004')}</p>
         <a className="button primary" href="/api/auth/login">
           {t('text005')}
-          <ArrowRight size={18} />
         </a>
       </main>
     );
@@ -168,17 +154,15 @@ export default function App() {
     {
       id: 'profile',
       text: t('text006'),
-      icon: LayoutDashboard,
       show: ['employee', 'manager'].includes(user.role),
     },
-    { id: 'team', text: t('text007'), icon: Users, show: user.role === 'manager' },
+    { id: 'team', text: t('text007'), show: user.role === 'manager' },
     {
       id: 'method',
       text: t('text008'),
-      icon: BookOpen,
       show: ['methodologist', 'admin'].includes(user.role),
     },
-    { id: 'admin', text: t('text009'), icon: Settings, show: user.role === 'admin' },
+    { id: 'admin', text: t('text009'), show: user.role === 'admin' },
   ];
   return (
     <div className="app-shell">
@@ -192,7 +176,7 @@ export default function App() {
             <small>ACADEMY</small>
           </span>
         </a>
-        <div className="workspace-label">{t('text010')}</div>
+
         <nav>
           {nav
             .filter((n) => n.show)
@@ -202,23 +186,11 @@ export default function App() {
                 onClick={() => void navigate(n.id)}
                 className={page === n.id ? 'active' : ''}
               >
-                <n.icon size={20} />
                 {n.text}
-                {page === n.id && <span className="nav-dot" />}
               </button>
             ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="side-note">
-            <Compass size={24} />
-            <strong>{t('text011')}</strong>
-            <p>
-              {t('text012')}
-              <br />
-              {t('text013')}
-            </p>
-            <span>Bilim → BuildEX → BIU</span>
-          </div>
           <button
             className="logout"
             onClick={async () => {
@@ -228,29 +200,13 @@ export default function App() {
               setUser(null);
             }}
           >
-            <LogOut size={17} />
             {t('text014')}
           </button>
-          <div className="copyright">BI Academy © 2026</div>
         </div>
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <div className="breadcrumb">
-            {t('text015')}
-            <ChevronRight size={14} />{' '}
-            <span>{nav.find((n) => n.id === page)?.text ?? t('text016')}</span>
-          </div>
           <div className="top-actions">
-            <span className="language">RU</span>
-            <span className="top-divider" />
-            <div className="user-circle">
-              {user.name
-                .split(' ')
-                .map((x) => x[0])
-                .slice(0, 2)
-                .join('')}
-            </div>
             <div className="user-info">
               <strong>{user.name}</strong>
               <small>{user.position}</small>
@@ -259,10 +215,7 @@ export default function App() {
         </header>
         {demo && (
           <div className="demo-bar">
-            <span>
-              <span className="status-dot" />
-              {t('text017')}
-            </span>
+            <span>{t('text017')}</span>
             <label>
               {t('text018')}
               <select
@@ -279,12 +232,7 @@ export default function App() {
             </label>
           </div>
         )}
-        {offline && (
-          <div className="offline-bar">
-            <WifiOff size={17} />
-            {t('text024')}
-          </div>
-        )}
+        {offline && <div className="offline-bar">{t('text024')}</div>}
         <main className="content">
           {error && (
             <div className="alert" role="alert">
@@ -318,9 +266,7 @@ export default function App() {
             <>
               <div className="page-title">
                 <div>
-                  <div className="eyebrow">{t('text026')}</div>
                   <h1>{t('text027')}</h1>
-                  <p>{t('text028')}</p>
                 </div>
                 <span className="count-badge">
                   {team.length}
@@ -330,7 +276,6 @@ export default function App() {
               {selected ? (
                 <>
                   <button className="text-button back-team" onClick={() => setSelected(null)}>
-                    <ArrowLeft size={17} />
                     {t('text030')}
                   </button>
                   <Profile portrait={selected} config={config!} readOnly />
@@ -344,10 +289,7 @@ export default function App() {
                       onClick={() => setSelected(p)}
                     >
                       <div className="team-avatar">
-                        <img
-                          src={p.avatar?.imageUrl ?? placeholder}
-                          alt={p.avatar?.name ?? t('text031')}
-                        />
+                        {p.avatar && <img src={p.avatar.imageUrl} alt={p.avatar.name} />}
                       </div>
                       <h3>{p.user.name}</h3>
                       <p>{p.user.position}</p>
@@ -363,15 +305,12 @@ export default function App() {
                       ) : (
                         <span className="pill neutral">{t('text032')}</span>
                       )}
-                      <span className="team-link">
-                        {t('text033')}
-                        <ArrowUpRight size={17} />
-                      </span>
+                      <span className="team-link">{t('text033')}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <Disclaimer />
+              {!selected && <Disclaimer />}
             </>
           )}
           {page === 'method' && (
@@ -383,13 +322,6 @@ export default function App() {
           )}
           {page === 'admin' && <Admin />}
         </main>
-        <footer className="footer">
-          <span>{t('text034')}</span>
-          <span>
-            BI ACADEMY <span className="footer-dot">●</span>
-            {t('text035')}
-          </span>
-        </footer>
       </div>
     </div>
   );

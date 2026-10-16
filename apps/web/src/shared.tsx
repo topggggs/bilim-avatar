@@ -1,4 +1,3 @@
-import { Brain, ChevronRight, MessageCircle, ShieldCheck, Users } from 'lucide-react';
 import ui from '../../../config/ui.ru.json';
 import {
   buildAvatar,
@@ -9,12 +8,6 @@ import {
 import type { Session, User } from '../../api/src/store';
 import { t } from './localization';
 export { ui };
-export const icons = {
-  critical: Brain,
-  confidence: MessageCircle,
-  discipline: ShieldCheck,
-  engagement: Users,
-};
 export const levelLabels = { low: t('text036'), medium: t('text037'), high: t('text038') };
 export type Portrait = {
   user: User;
@@ -64,25 +57,9 @@ export function readDraft(id: string): Draft | null {
 }
 export function Disclaimer() {
   return (
-    <div className="disclaimer">
-      <ShieldCheck size={19} />
-      <div>
-        <strong>{ui.disclaimer}</strong>
-        <p>{ui.methodology}</p>
-      </div>
-    </div>
-  );
-}
-export function Route() {
-  return (
-    <div className="route">
-      <span className="current">Bilim</span>
-      <ChevronRight size={14} />
-      <span>BuildEX</span>
-      <ChevronRight size={14} />
-      <span>BIU</span>
-      <ChevronRight size={14} />
-      <span>KPI</span>
-    </div>
+    <details className="disclaimer">
+      <summary>{ui.disclaimer}</summary>
+      <p>{ui.methodology}</p>
+    </details>
   );
 }

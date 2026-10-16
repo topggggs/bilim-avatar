@@ -1,4 +1,3 @@
-import { Save } from 'lucide-react';
 import { useState } from 'react';
 import { configSchema, scaleIds, type TestConfig } from '../../../../packages/core/src/index';
 import { api } from '../api';
@@ -49,12 +48,7 @@ export default function Methodology({
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">{t('text197')}</div>
-          <h1>
-            {t('text198')}
-            <span className="heading-dot">.</span>
-          </h1>
-          <p>{t('text199')}</p>
+          <h1>{t('text198')}</h1>
         </div>
         <span className="pill neutral">
           {t('text200')}
@@ -94,7 +88,6 @@ export default function Methodology({
           disabled={!canEdit || busy}
           onClick={() => void publish()}
         >
-          <Save size={17} />
           {t('text205')}
         </button>
       </div>
@@ -176,9 +169,6 @@ export default function Methodology({
         {tab === 'recommendations' &&
           value.recommendations.map((r, i) => (
             <section key={r.id} className="panel editor-row">
-              <span className="eyebrow">
-                {value.scales[r.scale].label} · {levelLabels[r.level]}
-              </span>
               <label className="form-label">
                 {t('text214')}
                 <input

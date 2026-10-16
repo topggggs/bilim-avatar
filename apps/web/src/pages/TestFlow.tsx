@@ -1,4 +1,3 @@
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   choices,
@@ -12,11 +11,11 @@ import { api, HttpError } from '../api';
 import { t } from '../localization';
 import { ui, type Draft } from '../shared';
 const universes = [
-  { id: 'cinema', emoji: '◈', title: t('text119'), text: t('text120') },
-  { id: 'anime', emoji: '✧', title: t('text121'), text: t('text122') },
-  { id: 'animals', emoji: '♧', title: t('text123'), text: t('text124') },
-  { id: 'sport', emoji: '◎', title: t('text125'), text: t('text126') },
-  { id: 'fantasy', emoji: '♜', title: t('text127'), text: t('text128') },
+  { id: 'cinema', title: t('text119') },
+  { id: 'anime', title: t('text121') },
+  { id: 'animals', title: t('text123') },
+  { id: 'sport', title: t('text125') },
+  { id: 'fantasy', title: t('text127') },
 ];
 export default function TestFlow({
   user,
@@ -131,22 +130,9 @@ export default function TestFlow({
     <div className="flow">
       <div className="flow-top">
         <button className="text-button" onClick={onExit}>
-          <ArrowLeft size={17} />
           {t('text136')}
         </button>
-        <span>{t('text137')}</span>
         <span className="flow-progress-text">{stage < 4 ? t('text138') : t('text139')}</span>
-      </div>
-      <div className="flow-steps">
-        <span className={stage < 4 ? 'current' : 'done'}>
-          <b>{stage < 4 ? '1' : '✓'}</b>
-          {t('text140')}
-        </span>
-        <div />
-        <span className={stage === 4 ? 'current' : ''}>
-          <b>2</b>
-          {t('text141')}
-        </span>
       </div>
       {error && (
         <div role="alert" className="alert">
@@ -155,42 +141,35 @@ export default function TestFlow({
       )}
       {stage === 0 ? (
         <section className="onboarding panel">
-          <span className="icon-tile large">
-            <ShieldCheck size={28} />
-          </span>
-          <div className="eyebrow">{t('text142')}</div>
           <h1>{t('text143')}</h1>
           <p>{t('text144')}</p>
-          <div className="consent-details">
-            <h3>{t('text145')}</h3>
-            <p>{t('text146')}</p>
+          <p>{t('text146')}</p>
+          <details className="consent-details">
+            <summary>{t('processingTerms')}</summary>
             <p>{ui.methodology}</p>
+            <p>{ui.consent}</p>
             <p>
               {t('text147')}
               {c.consentVersion}
               {t('text148')}
             </p>
-          </div>
+          </details>
           <label className="consent">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            <span>{ui.consent}</span>
+            <span>{ui.consentSummary}</span>
           </label>
           <button className="button primary" disabled={!consent} onClick={() => setStage(1)}>
             {t('text149')}
-            <ArrowRight size={18} />
           </button>
         </section>
       ) : stage < 4 ? (
         <section className="appearance panel">
           <div className="appearance-count">{String(stage).padStart(2, '0')} / 03</div>
           <h1>{stage === 1 ? t('text150') : stage === 2 ? t('text151') : t('text152')}</h1>
-          <p className="muted">
-            {stage === 1 ? t('text153') : stage === 2 ? t('text154') : t('text155')}
-          </p>
           {stage === 1 ? (
             <div className="option-grid universe-grid">
               {universes.map((u) => (
@@ -202,21 +181,16 @@ export default function TestFlow({
                     setAppearance({ ...appearance, universe: u.id as Appearance['universe'] })
                   }
                 >
-                  <span className="option-emoji">{u.emoji}</span>
                   <h3>{u.title}</h3>
-                  <p>{u.text}</p>
-                  {appearance.universe === u.id && (
-                    <CheckCircle2 className="selected-check" size={20} />
-                  )}
                 </button>
               ))}
             </div>
           ) : stage === 2 ? (
             <div className="option-grid gender-grid">
               {[
-                { id: 'male', title: t('text156'), symbol: '♂' },
-                { id: 'female', title: t('text157'), symbol: '♀' },
-                { id: 'neutral', title: t('text158'), symbol: '◇' },
+                { id: 'male', title: t('text156') },
+                { id: 'female', title: t('text157') },
+                { id: 'neutral', title: t('text158') },
               ].map((g) => (
                 <button
                   aria-pressed={appearance.gender === g.id}
@@ -226,7 +200,6 @@ export default function TestFlow({
                     setAppearance({ ...appearance, gender: g.id as Appearance['gender'] })
                   }
                 >
-                  <span className="option-emoji">{g.symbol}</span>
                   <h3>{g.title}</h3>
                 </button>
               ))}
@@ -263,7 +236,6 @@ export default function TestFlow({
               disabled={busy}
               onClick={() => setStage(stage - 1)}
             >
-              <ArrowLeft size={17} />
               {t('text163')}
             </button>
             <button
@@ -272,15 +244,11 @@ export default function TestFlow({
               onClick={() => (stage === 3 ? void start() : setStage(stage + 1))}
             >
               {stage === 3 ? t('text164') : t('text165')}
-              <ArrowRight size={17} />
             </button>
           </div>
         </section>
       ) : tie ? (
         <section className="panel tie-panel">
-          <span className="icon-tile large">
-            <Sparkles size={28} />
-          </span>
           <h1>{t('text166')}</h1>
           <p>{t('text167')}</p>
           <label className="form-label">
@@ -323,7 +291,6 @@ export default function TestFlow({
             onClick={() => void submit()}
           >
             {t('text174')}
-            <Sparkles size={18} />
           </button>
         </section>
       ) : (
@@ -334,7 +301,6 @@ export default function TestFlow({
               {String(index + 1).padStart(2, '0')} / 15
             </span>
             <span className="sync-status" role="status">
-              <Check size={14} />
               {syncStatus}
             </span>
           </div>
@@ -342,9 +308,7 @@ export default function TestFlow({
             <span style={{ width: `${(count / 15) * 100}%` }} />
           </div>
           <div className="question-area">
-            <span className="eyebrow">{t('text176')}</span>
             <h1 key={q.id}>{q.text}</h1>
-            <p>{t('text177')}</p>
           </div>
           <div className="likert" role="radiogroup" aria-label={t('text178')}>
             {[1, 2, 3, 4, 5, 6, 7].map((v) => (
@@ -356,7 +320,7 @@ export default function TestFlow({
                 className={`likert-point point-${v} ${answers[q.id] === v ? 'checked' : ''}`}
                 onClick={() => answer(v)}
               >
-                {answers[q.id] === v ? <Check size={22} /> : v}
+                {v}
               </button>
             ))}
           </div>
@@ -379,25 +343,19 @@ export default function TestFlow({
               disabled={index === 0 || busy}
               onClick={() => setIndex(index - 1)}
             >
-              <ArrowLeft size={17} />
               {t('text189')}
             </button>
-            <span className="question-hint">{t('text190')}</span>
+
             <button
               className="button primary"
               disabled={!answers[q.id] || busy || (index === 14 && offline)}
               onClick={() => (index === 14 ? void submit() : setIndex(index + 1))}
             >
               {busy ? t('text191') : index === 14 ? t('text192') : t('text193')}
-              <ArrowRight size={17} />
             </button>
           </div>
         </section>
       )}
-      <div className="flow-privacy">
-        <ShieldCheck size={15} />
-        {t('text194')}
-      </div>
     </div>
   );
 }

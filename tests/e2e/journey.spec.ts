@@ -9,10 +9,10 @@ async function auth(page: Page, role = 'employee') {
 async function create(page: Page) {
   await page.getByRole('button', { name: 'Создать аватара', exact: true }).click();
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: 'Всё понятно, начнём' }).click();
+  await page.getByRole('button', { name: 'Начать', exact: true }).click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await page.getByRole('button', { name: 'Перейти к тесту' }).click();
+  await page.getByRole('button', { name: 'К тесту' }).click();
 }
 test('сотрудник: offline, reload, 15 вопросов, равные качества, профиль, аватар и 90 дней', async ({
   page,
@@ -21,7 +21,7 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Мой профиль развития.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   await create(page);
   await page.getByRole('radio', { name: '4 — нейтрально', exact: true }).click();
   await page.getByRole('button', { name: 'Далее', exact: true }).click();
@@ -53,7 +53,7 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
   await page.getByRole('button', { name: 'Получить профиль', exact: true }).click();
   await page.getByLabel('Главное качество', { exact: true }).selectOption('critical');
   await page.getByLabel('Знак отличия', { exact: true }).selectOption('confidence');
-  await page.getByRole('button', { name: 'Создать моего героя' }).click();
+  await page.getByRole('button', { name: 'Создать аватара' }).click();
   await expect(page.getByRole('heading', { name: 'Лис-стратег', exact: true })).toBeVisible();
   await expect(page.getByRole('meter')).toHaveCount(4);
   for (const m of await page.getByRole('meter').all())
@@ -74,7 +74,7 @@ test('руководитель: только команда, профиль бе
   await page.getByRole('button', { name: 'Моя команда', exact: true }).click();
   await expect(page.getByRole('button', { name: /Алина Нурланова/ })).toBeVisible();
   await page.getByRole('button', { name: /Алина Нурланова/ }).click();
-  await expect(page.getByRole('heading', { name: 'Алина Нурланова.', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Алина Нурланова', exact: true })).toBeVisible();
   await expect(page.getByRole('radiogroup')).toHaveCount(0);
   const foreign = await page.request.get('/api/profile/outsider');
   expect(foreign.status()).toBe(403);
@@ -94,7 +94,7 @@ test('телефон 375px: профиль и команда без горизо
   await page.setViewportSize({ width: 375, height: 812 });
   await auth(page, 'employee');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Мой профиль развития.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -110,7 +110,7 @@ test('телефон 375px: профиль и команда без горизо
 test('доступность: профиль без нарушений WCAG AA', async ({ page }) => {
   await auth(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Мой профиль развития.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
     .analyze();
