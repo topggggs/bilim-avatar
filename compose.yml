@@ -1,0 +1,56 @@
+name: bilim-avatar
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: bilim
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: bilim
+    ports: ['127.0.0.1:5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bilim']
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['127.0.0.1:6379:6379']
+    volumes: ['redisdata:/data']
+  s3:
+    image: minio/s3:RELEASE.2025-04-22T22-12-26Z
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY}
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+    volumes: ['s3data:/data']
+  app:
+    build: .
+    env_file: .env
+    environment:
+      STORAGE_MODE: postgres
+      DATABASE_URL: postgres://bilim:${POSTGRES_PASSWORD}@postgres:5432/bilim
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://s3:9000
+    ports: ['127.0.0.1:3001:3001']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+  worker:
+    build: .
+    command: ['npm', 'run', 'worker']
+    env_file: .env
+    environment:
+      STORAGE_MODE: postgres
+      DATABASE_URL: postgres://bilim:${POSTGRES_PASSWORD}@postgres:5432/bilim
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://s3:9000
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      s3: { condition: service_started }
+volumes:
+  pgdata:
+  redisdata:
+  s3data:

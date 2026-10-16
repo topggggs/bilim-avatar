@@ -1,0 +1,310 @@
+{
+  "version": "0.1.0",
+  "contentStatus": "draft",
+  "retakeDays": 90,
+  "thresholds": {
+    "medium": 40,
+    "high": 70
+  },
+  "quality": {
+    "neutralCount": 12,
+    "minimumSeconds": 60
+  },
+  "consentVersion": "2026-10-16-draft",
+  "scales": {
+    "critical": {
+      "label": "Критическое мышление",
+      "short": "Мышление",
+      "archetype": "strategist",
+      "interpretations": {
+        "low": "Начните с проверки фактов и поиска первопричины отклонений.",
+        "medium": "Вы анализируете рабочие ситуации. Укрепляйте привычку проверять предположения.",
+        "high": "Вы замечаете несоответствия и находите причины. Применяйте этот навык в разборе сложных случаев."
+      }
+    },
+    "confidence": {
+      "label": "Уверенность в себе",
+      "short": "Уверенность",
+      "archetype": "leader",
+      "interpretations": {
+        "low": "Тренируйте спокойное высказывание своей позиции и обращение за помощью.",
+        "medium": "Вы готовы брать ответственность. Практикуйте аргументированное обсуждение решений.",
+        "high": "Вы уверенно выражаете позицию и берёте ответственность. Помогайте коллегам говорить о рисках."
+      }
+    },
+    "discipline": {
+      "label": "Дисциплина",
+      "short": "Дисциплина",
+      "archetype": "master",
+      "interpretations": {
+        "low": "Создайте устойчивые ритуалы начала и завершения смены.",
+        "medium": "Вы соблюдаете основные правила. Сделайте фиксацию результатов ежедневной привычкой.",
+        "high": "Вы последовательно соблюдаете процессы. Поделитесь работающим чек-листом с командой."
+      }
+    },
+    "engagement": {
+      "label": "Вовлечённость",
+      "short": "Вовлечённость",
+      "archetype": "mentor",
+      "interpretations": {
+        "low": "Начните с понимания вклада вашей работы в общий результат объекта.",
+        "medium": "Вы участвуете в жизни команды. Попробуйте предложить улучшение смежного процесса.",
+        "high": "Вы видите общий результат и поддерживаете коллег. Попробуйте себя в наставничестве."
+      }
+    }
+  },
+  "questions": [
+    {
+      "id": "1",
+      "scales": ["discipline"],
+      "reverse": false,
+      "text": "Перед началом смены я проверяю план работ, допуски и СИЗ, даже если время поджимает."
+    },
+    {
+      "id": "2",
+      "scales": ["critical"],
+      "reverse": false,
+      "text": "Получив чертёж, я сверяю его с реальной обстановкой на объекте, прежде чем начинать работу."
+    },
+    {
+      "id": "3",
+      "scales": ["confidence"],
+      "reverse": false,
+      "text": "Если я вижу нарушение технологии, я скажу об этом вслух, даже когда его допускает более опытный или старший по должности коллега."
+    },
+    {
+      "id": "4",
+      "scales": ["engagement"],
+      "reverse": false,
+      "text": "Если у соседней бригады проблема, способная сорвать общий график, я предложу помощь, хотя это не моя зона ответственности."
+    },
+    {
+      "id": "5",
+      "scales": ["discipline"],
+      "reverse": true,
+      "text": "Если пропуск одного пункта чек-листа экономит время, я, скорее всего, его пропущу."
+    },
+    {
+      "id": "6",
+      "scales": ["critical"],
+      "reverse": true,
+      "text": "Если указание дал опытный коллега, я выполняю его без проверки, даже когда оно кажется странным."
+    },
+    {
+      "id": "7",
+      "scales": ["engagement"],
+      "reverse": false,
+      "text": "Мне важно понимать, как результат моей работы влияет на следующие этапы и на качество объекта в целом."
+    },
+    {
+      "id": "8",
+      "scales": ["confidence"],
+      "reverse": false,
+      "text": "Когда руководитель недоступен, а решение нужно принять сразу, я беру ответственность на себя."
+    },
+    {
+      "id": "9",
+      "scales": ["discipline"],
+      "reverse": false,
+      "text": "Я фиксирую выполненные объёмы и замечания в тот же день, а не откладываю на потом."
+    },
+    {
+      "id": "10",
+      "scales": ["engagement"],
+      "reverse": true,
+      "text": "На объекте я делаю ровно то, что поручено, и стараюсь не вникать в остальное."
+    },
+    {
+      "id": "11",
+      "scales": ["critical"],
+      "reverse": false,
+      "text": "При браке или задержке я выясняю первопричину, а не просто устраняю последствия."
+    },
+    {
+      "id": "12",
+      "scales": ["confidence"],
+      "reverse": true,
+      "text": "Перед сдачей работ я сомневаюсь в своих выводах и ищу, кто бы их подтвердил."
+    },
+    {
+      "id": "13",
+      "scales": ["discipline"],
+      "reverse": false,
+      "text": "Я соблюдаю технологическую последовательность работ, даже когда меня торопят."
+    },
+    {
+      "id": "14",
+      "scales": ["engagement"],
+      "reverse": false,
+      "text": "Я охотно делюсь с коллегами и новичками приёмами, которые помогли мне получить лучший результат."
+    },
+    {
+      "id": "15",
+      "scales": ["critical", "confidence"],
+      "reverse": false,
+      "text": "Вы видите, что армирование выполнено не по проекту, а бригада говорит: «Так всегда делали, держит же». Я остановлю работы, зафиксирую отклонение и добьюсь согласования с инженером."
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "rec-critical-1",
+      "scale": "critical",
+      "level": "low",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Правило «три почему»",
+      "text": "При каждом отклонении задавайте три уточняющих вопроса о причине.",
+      "link": "/bilim/practice/three-whys"
+    },
+    {
+      "id": "rec-critical-2",
+      "scale": "critical",
+      "level": "low",
+      "format": "mentor",
+      "durationDays": 14,
+      "title": "Сверка чертежа с натурой",
+      "text": "Разберите три несоответствия с инженером или наставником.",
+      "link": "/buildex/cases/blueprint"
+    },
+    {
+      "id": "rec-critical-medium",
+      "scale": "critical",
+      "level": "medium",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Правило «три почему»",
+      "text": "При каждом отклонении задавайте три уточняющих вопроса о причине.",
+      "link": "/bilim/practice/three-whys"
+    },
+    {
+      "id": "rec-critical-high",
+      "scale": "critical",
+      "level": "high",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Правило «три почему»",
+      "text": "При каждом отклонении задавайте три уточняющих вопроса о причине.",
+      "link": "/bilim/practice/three-whys"
+    },
+    {
+      "id": "rec-confidence-1",
+      "scale": "confidence",
+      "level": "low",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Факт — риск — предложение",
+      "text": "Отрепетируйте замечание с наставником и примените формулу на планёрке.",
+      "link": "/bilim/practice/speak-up"
+    },
+    {
+      "id": "rec-confidence-2",
+      "scale": "confidence",
+      "level": "low",
+      "format": "mentor",
+      "durationDays": 14,
+      "title": "Одна самостоятельная планёрка",
+      "text": "Подготовьте и проведите планёрку с последующей обратной связью наставника.",
+      "link": "/buildex/practice/briefing"
+    },
+    {
+      "id": "rec-confidence-medium",
+      "scale": "confidence",
+      "level": "medium",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Факт — риск — предложение",
+      "text": "Отрепетируйте замечание с наставником и примените формулу на планёрке.",
+      "link": "/bilim/practice/speak-up"
+    },
+    {
+      "id": "rec-confidence-high",
+      "scale": "confidence",
+      "level": "high",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Факт — риск — предложение",
+      "text": "Отрепетируйте замечание с наставником и примените формулу на планёрке.",
+      "link": "/bilim/practice/speak-up"
+    },
+    {
+      "id": "rec-discipline-1",
+      "scale": "discipline",
+      "level": "low",
+      "format": "checklist",
+      "durationDays": 14,
+      "title": "Чек-лист начала смены",
+      "text": "До начала работ проверьте план, допуски и СИЗ.",
+      "link": "/bilim/checklists/shift-start"
+    },
+    {
+      "id": "rec-discipline-2",
+      "scale": "discipline",
+      "level": "low",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Журнал смены",
+      "text": "Ежедневно фиксируйте выполненные объёмы и замечания до конца смены.",
+      "link": "/bilim/practice/shift-log"
+    },
+    {
+      "id": "rec-discipline-medium",
+      "scale": "discipline",
+      "level": "medium",
+      "format": "checklist",
+      "durationDays": 14,
+      "title": "Чек-лист начала смены",
+      "text": "До начала работ проверьте план, допуски и СИЗ.",
+      "link": "/bilim/checklists/shift-start"
+    },
+    {
+      "id": "rec-discipline-high",
+      "scale": "discipline",
+      "level": "high",
+      "format": "checklist",
+      "durationDays": 14,
+      "title": "Чек-лист начала смены",
+      "text": "До начала работ проверьте план, допуски и СИЗ.",
+      "link": "/bilim/checklists/shift-start"
+    },
+    {
+      "id": "rec-engagement-1",
+      "scale": "engagement",
+      "level": "low",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Одно улучшение в неделю",
+      "text": "Предложите команде одно конкретное улучшение рабочего процесса.",
+      "link": "/bilim/practice/improvement"
+    },
+    {
+      "id": "rec-engagement-2",
+      "scale": "engagement",
+      "level": "low",
+      "format": "mentor",
+      "durationDays": 14,
+      "title": "День в смежной бригаде",
+      "text": "Обсудите с руководителем стажировку, чтобы увидеть следующий этап работ.",
+      "link": "/buildex/practice/cross-team"
+    },
+    {
+      "id": "rec-engagement-medium",
+      "scale": "engagement",
+      "level": "medium",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Одно улучшение в неделю",
+      "text": "Предложите команде одно конкретное улучшение рабочего процесса.",
+      "link": "/bilim/practice/improvement"
+    },
+    {
+      "id": "rec-engagement-high",
+      "scale": "engagement",
+      "level": "high",
+      "format": "practice",
+      "durationDays": 14,
+      "title": "Одно улучшение в неделю",
+      "text": "Предложите команде одно конкретное улучшение рабочего процесса.",
+      "link": "/bilim/practice/improvement"
+    }
+  ]
+}
