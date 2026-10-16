@@ -376,5 +376,9 @@
   "auth.verifyCode": "Подтвердить номер",
   "auth.resendCode": "Отправить код ещё раз",
   "auth.smsPreview": "Демо: SMS не отправляется. Тестовый код:",
-  "auth.sendCode": "Получить код"
+  "auth.sendCode": "Получить код",
+  "auth.changePhone": "Изменить номер",
+  "auth.invalidLink": "Нужна новая ссылка",
+  "auth.invalidCaption": "Эта ссылка недействительна или устарела.",
+  "auth.requestAgain": "Запросить заново"
 }

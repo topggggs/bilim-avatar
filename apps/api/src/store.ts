@@ -22,6 +22,7 @@ export type User = {
   role: Role;
   managerId?: string;
   position: string;
+  access?: 'pending' | 'active' | 'suspended';
 };
 export type Session = {
   id: string;

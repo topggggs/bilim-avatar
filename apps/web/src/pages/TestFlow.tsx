@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   choices,
+  avatarCatalog,
+  buildAvatar,
   type Appearance,
   type Scale,
   type Scores,
@@ -25,6 +27,7 @@ export default function TestFlow({
   onDone,
   onDraft,
   offline,
+  initialAppearance,
 }: {
   user: User;
   config: TestConfig;
@@ -33,10 +36,12 @@ export default function TestFlow({
   onDone: () => void;
   onDraft: (d: Draft) => void;
   offline: boolean;
+  initialAppearance?: Appearance;
 }) {
   const [stage, setStage] = useState(draft ? 4 : 0),
     [appearance, setAppearance] = useState<Appearance>(
-      draft?.session.appearance ?? { universe: 'animals', gender: 'neutral', style: 'tech' },
+      draft?.session.appearance ??
+        initialAppearance ?? { universe: 'animals', gender: 'neutral', style: 'tech' },
     ),
     [consent, setConsent] = useState(false),
     [session, setSession] = useState(draft?.session ?? null),
@@ -125,6 +130,12 @@ export default function TestFlow({
       setBusy(false);
     }
   }
+  const preview = buildAvatar({
+    ...appearance,
+    archetype: 'strategist',
+    accessory: 'confidence',
+    boosted: false,
+  }).fallbackSvg;
   const tieOptions = tie ? choices(tie.percentages, primary || undefined) : null;
   return (
     <div className="flow">
@@ -170,6 +181,14 @@ export default function TestFlow({
         <section className="appearance panel">
           <div className="appearance-count">{String(stage).padStart(2, '0')} / 03</div>
           <h1>{stage === 1 ? t('text150') : stage === 2 ? t('text151') : t('text152')}</h1>
+          {stage > 1 && (
+            <div className="appearance-preview">
+              <img
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview)}`}
+                alt="Предпросмотр персонажа"
+              />
+            </div>
+          )}
           {stage === 1 ? (
             <div className="option-grid universe-grid">
               {universes.map((u) => (
@@ -181,6 +200,11 @@ export default function TestFlow({
                     setAppearance({ ...appearance, universe: u.id as Appearance['universe'] })
                   }
                 >
+                  <img
+                    className="universe-preview"
+                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildAvatar({ ...avatarCatalog.find((a) => a.universe === u.id)!.config, boosted: false }).fallbackSvg)}`}
+                    alt=""
+                  />
                   <h3>{u.title}</h3>
                 </button>
               ))}

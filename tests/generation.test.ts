@@ -1,10 +1,116 @@
 import { it, expect, vi, afterEach } from 'vitest';
 import { S3Client, CreateBucketCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { Worker } from 'bullmq';
 import { MemoryStore, initialState } from '../apps/api/src/store';
-import { generate, imageUrl } from '../apps/api/src/generation';
+import {
+  generate,
+  imageUrl,
+  generatedPng,
+  redisConnection,
+  avatarQueue,
+} from '../apps/api/src/generation';
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+});
+it.skipIf(!process.env.TEST_REDIS_URL)(
+  'реальная avatarQueue: первый connect, обработка, быстрый отказ при обрыве и восстановление',
+  async () => {
+    vi.stubEnv('REDIS_URL', process.env.TEST_REDIS_URL!);
+    const name = `bilim-generation-qa-${crypto.randomUUID()}`;
+    const store = new MemoryStore(initialState(true));
+    const id = await store.tx((s) => {
+      const avatar = s.avatars[0];
+      avatar.status = 'queued';
+      return avatar.id;
+    });
+    const queue = avatarQueue(name);
+    queue.on('error', () => {});
+    const worker = new Worker(name, (job) => generate(store, job.data.id, 'fallback'), {
+      connection: redisConnection(true),
+    });
+    worker.on('error', () => {});
+    try {
+      // Called immediately: commands must wait for BullMQ's initial ready/version check.
+      expect(await queue.getJobCounts('waiting')).toHaveProperty('waiting', 0);
+      await worker.waitUntilReady();
+      await vi.waitFor(async () => expect(await queue.getWorkersCount()).toBeGreaterThan(0));
+      await queue.add('generate', { id });
+      await vi.waitFor(async () => expect((await store.read()).avatars[0].status).toBe('fallback'));
+      const client = await queue.client;
+      client.disconnect();
+      await vi.waitFor(() => expect(client.status).toBe('end'));
+      const started = Date.now();
+      await expect(queue.getJobCounts('waiting')).rejects.toThrow('avatar_queue_unavailable');
+      expect(Date.now() - started).toBeLessThan(500);
+      await client.connect();
+      expect(await queue.getJobCounts('waiting')).toHaveProperty('waiting', 0);
+    } finally {
+      await worker.close();
+      await queue.obliterate({ force: true });
+      await queue.close();
+    }
+  },
+);
+it('задача захватывается атомарно; повторная доставка не вызывает модель дважды', async () => {
+  const store = new MemoryStore(initialState(true));
+  const id = await store.tx((s) => {
+    const a = s.avatars[0];
+    a.status = 'queued';
+    return a.id;
+  });
+  let release: (value: Response) => void = () => {};
+  const request = vi.spyOn(globalThis, 'fetch').mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const first = generate(store, id, 'openai');
+  await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+  await generate(store, id, 'openai');
+  release(new Response('{}', { status: 503 }));
+  await first;
+  expect(request).toHaveBeenCalledTimes(1);
+  expect((await store.read()).avatars.find((a) => a.id === id)?.status).toBe('fallback');
+});
+it('просроченная задача получает fallback без обращения к модели', async () => {
+  const store = new MemoryStore(initialState(true));
+  const id = await store.tx((s) => {
+    const a = s.avatars[0];
+    a.status = 'queued';
+    a.createdAt = new Date(Date.now() - 28000).toISOString();
+    return a.id;
+  });
+  const request = vi.spyOn(globalThis, 'fetch');
+  await generate(store, id, 'openai');
+  expect(request).not.toHaveBeenCalled();
+  expect((await store.read()).avatars.find((a) => a.id === id)?.error).toBe('deadline_exceeded');
+});
+it('некорректные ответы модели не сохраняются под видом PNG', () => {
+  for (const data of [null, '', 'not_an_image', 'aGVsbG8=', 'a'.repeat(16000001)])
+    expect(() => generatedPng(data)).toThrow('invalid_image_response');
+  expect(
+    generatedPng(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jTRUAAAAASUVORK5CYII=',
+    ).length,
+  ).toBeGreaterThan(8);
+});
+it('Redis connection respects TLS, escaped credentials and database, queue fails quickly', () => {
+  vi.stubEnv('REDIS_URL', 'rediss://user:p%40ss@cache.example:6380/4');
+  expect(redisConnection()).toMatchObject({
+    host: 'cache.example',
+    port: 6380,
+    username: 'user',
+    password: 'p@ss',
+    db: 4,
+    tls: {},
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+  });
+  expect(redisConnection(true).maxRetriesPerRequest).toBe(null);
+  vi.stubEnv('REDIS_URL', 'redis://cache/invalid');
+  expect(() => redisConnection()).toThrow('Invalid REDIS_URL database');
 });
 it('ошибка провайдера приводит к безопасному запасному аватару', async () => {
   const store = new MemoryStore(initialState(true));

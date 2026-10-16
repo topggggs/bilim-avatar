@@ -310,6 +310,7 @@ export function localAuth(
         name: body.name,
         position: body.position || 'Сотрудник',
         role: 'employee',
+        access: options.preview ? 'active' : 'pending',
       });
       const next = {
         id: randomUUID(),

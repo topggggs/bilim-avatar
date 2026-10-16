@@ -9,6 +9,7 @@ import {
   avatarConfig,
   buildAvatar,
   avatarName,
+  avatarCatalog,
   scaleIds,
   validateAnswers,
   type TestConfig,
@@ -224,8 +225,19 @@ describe('buildAvatar', () => {
                 expect(avatarName(conf)).toBeTruthy();
               }
   });
-  it('отклоняет неверный архетип, палитру или аксессуар', () => {
-    for (const bad of [{ archetype: 'unknown' }, { style: 'unknown' }, { accessory: 'unknown' }])
+  it('отклоняет все неизвестные значения конфигурации и попытки вставить разметку', () => {
+    for (const bad of [
+      { universe: 'unknown' },
+      { archetype: 'unknown' },
+      { style: 'unknown' },
+      { accessory: 'unknown' },
+      { gender: 'unknown' },
+      { boosted: 'false' },
+      { universe: 'constructor' },
+      { archetype: '__proto__' },
+      { gender: '<script>alert(1)</script>' },
+      { style: '#fff\" onload=\"alert(1)' },
+    ])
       expect(() =>
         buildAvatar({
           ...{
@@ -239,5 +251,27 @@ describe('buildAvatar', () => {
           ...bad,
         } as AvatarConfig),
       ).toThrow();
+    expect(() => buildAvatar(null as unknown as AvatarConfig)).toThrow();
+    expect(() => avatarName(undefined as unknown as AvatarConfig)).toThrow();
+  });
+  it('каталог содержит 20 различных оригинальных персонажей и безопасные превью', () => {
+    expect(avatarCatalog).toHaveLength(20);
+    expect(new Set(avatarCatalog.map((entry) => entry.id)).size).toBe(20);
+    expect(new Set(avatarCatalog.map((entry) => entry.name)).size).toBe(20);
+    const images = new Set<string>();
+    for (const entry of avatarCatalog) {
+      expect(avatarName(entry.config)).toBe(entry.name);
+      const { fallbackSvg, prompt } = buildAvatar(entry.config);
+      images.add(fallbackSvg);
+      expect(fallbackSvg).toContain(`<title>${entry.name}</title>`);
+      expect(fallbackSvg).not.toMatch(/<script|<foreignObject|<image|onload=|(?:href|src)=/i);
+      expect(fallbackSvg).not.toContain('FACE');
+      expect(prompt).toContain('no floating stickers');
+      expect(Object.isFrozen(entry.config)).toBe(true);
+    }
+    expect(images.size).toBe(20);
+    expect(Object.isFrozen(avatarCatalog)).toBe(true);
+    for (const universe of ['cinema', 'anime', 'animals', 'sport', 'fantasy'])
+      expect(avatarCatalog.filter((entry) => entry.universe === universe)).toHaveLength(4);
   });
 });

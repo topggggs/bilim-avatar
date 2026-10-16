@@ -202,4 +202,4 @@ export function avatarConfig(
     boosted: scores[p] >= c.thresholds.high,
   };
 }
-export { buildAvatar, avatarName } from './avatar.js';
+export { buildAvatar, avatarName, avatarCatalog } from './avatar.js';

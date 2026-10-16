@@ -217,3 +217,32 @@ test('ранг: выполнение практики, проверка руко
   const a11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(a11y.violations).toEqual([]);
 });
+
+test('каталог: 20 героев, фильтр вселенной, изменение стиля и телефон', async ({ page }) => {
+  await auth(page);
+  await page.goto('/');
+  await navigate(page, 'Персонажи');
+  await expect(page.locator('.avatar-catalog-card')).toHaveCount(20);
+  await page.getByRole('button', { name: 'Животные', exact: true }).click();
+  await expect(page.locator('.avatar-catalog-card')).toHaveCount(4);
+  await page.getByLabel('Стиль', { exact: true }).selectOption('bright');
+  await expect(page.getByRole('heading', { name: 'Лис-стратег', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'docs/avatars-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'docs/avatars-mobile.png', fullPage: true });
+  const a11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(a11y.violations).toEqual([]);
+});
+
+test('настройки: редактирование имени и сохранение после перезагрузки', async ({ page }) => {
+  await auth(page);
+  await page.goto('/');
+  await navigate(page, 'Настройки');
+  await page.getByLabel('Должность', { exact: true }).fill('Инженер участка');
+  await page.getByRole('button', { name: 'Сохранить изменения', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Данные сохранены');
+  await page.reload();
+  await navigate(page, 'Настройки');
+  await expect(page.getByLabel('Должность', { exact: true })).toHaveValue('Инженер участка');
+});

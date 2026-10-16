@@ -1,7 +1,9 @@
-import Auth, { readAuthLink, type AuthMode } from './pages/Auth';
+import Account from './pages/Account';
+import Avatars from './pages/Avatars';
+import Auth, { readAuthLink, clearAuthFlow, type AuthMode } from './pages/Auth';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { scaleIds, type TestConfig } from '../../../packages/core/src/index';
+import { scaleIds, type TestConfig, type Appearance } from '../../../packages/core/src/index';
 import type { Session, User } from '../../api/src/store';
 import { api, HttpError } from './api';
 import { t } from './localization';
@@ -32,6 +34,7 @@ export default function App() {
     [draft, setDraft] = useState<Draft | null>(null),
     [team, setTeam] = useState<Portrait[]>([]),
     [selected, setSelected] = useState<Portrait | null>(null);
+  const [appearance, setAppearance] = useState<Appearance | undefined>();
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [teamQuery, setTeamQuery] = useState('');
@@ -45,6 +48,13 @@ export default function App() {
       setAuthMode(mode);
       const u = await api<User>('/me');
       setUser(u);
+      if (u.access && u.access !== 'active') {
+        setPage('account');
+        setPortrait(null);
+        setConfig(null);
+        setDraft(null);
+        return;
+      }
       const c = await api<TestConfig>('/test/config');
       setConfig(c);
       if (['employee', 'manager'].includes(u.role)) {
@@ -120,10 +130,22 @@ export default function App() {
       window.removeEventListener('offline', online);
     };
   }, []);
+  function signedOut() {
+    clearAuthFlow();
+    setAuthLink(null);
+    sessionStorage.removeItem('bilim-bootstrap');
+    if (user) localStorage.removeItem(`bilim-draft-${user.id}`);
+    setUser(null);
+    setPortrait(null);
+    setDraft(null);
+    setTeam([]);
+    setError('');
+  }
   async function switchRole(id: string) {
     setBusy(true);
     try {
       await api('/auth/demo', 'POST', { userId: id });
+      clearAuthFlow();
       sessionStorage.removeItem('bilim-bootstrap');
       setSelected(null);
       setPortrait(null);
@@ -172,6 +194,7 @@ export default function App() {
         }}
       />
     );
+  const activeAccess = !user.access || user.access === 'active';
   const nav = [
     { id: 'home', text: t('home.nav'), show: ['employee', 'manager'].includes(user.role) },
     {
@@ -187,6 +210,8 @@ export default function App() {
       show: ['methodologist', 'admin'].includes(user.role),
     },
     { id: 'admin', text: t('text009'), show: user.role === 'admin' },
+    { id: 'avatars', text: 'Персонажи', show: ['employee', 'manager'].includes(user.role) },
+    { id: 'account', text: 'Настройки', show: true },
   ];
   return (
     <div className="app-shell">
@@ -197,10 +222,12 @@ export default function App() {
             <span>{user.name}</span>
             <button
               onClick={async () => {
-                await api('/auth/logout', 'POST');
-                sessionStorage.removeItem('bilim-bootstrap');
-                localStorage.removeItem(`bilim-draft-${user.id}`);
-                setUser(null);
+                try {
+                  await api('/auth/logout', 'POST');
+                  signedOut();
+                } catch (e) {
+                  setError((e as Error).message);
+                }
               }}
             >
               {t('text014')}
@@ -238,7 +265,7 @@ export default function App() {
         </div>
         <nav id="site-navigation" className={`site-nav ${menuOpen ? 'is-open' : ''}`}>
           {nav
-            .filter((n) => n.show)
+            .filter((n) => n.show && (activeAccess || n.id === 'account'))
             .map((n) => (
               <button
                 key={n.id}
@@ -284,6 +311,28 @@ export default function App() {
               </button>
             </div>
           )}
+          {page === 'account' && (
+            <Account
+              user={user}
+              onUpdate={(u) => {
+                setUser(u);
+                if (portrait) setPortrait({ ...portrait, user: u });
+                sessionStorage.removeItem('bilim-bootstrap');
+              }}
+              onSignOut={signedOut}
+            />
+          )}
+          {page === 'avatars' && (
+            <Avatars
+              canStart={
+                !portrait?.nextAllowedAt || Date.parse(portrait.nextAllowedAt) <= Date.now()
+              }
+              onSelect={(a) => {
+                setAppearance(a);
+                setPage('create');
+              }}
+            />
+          )}
           {page === 'create' && config && (
             <TestFlow
               user={user}
@@ -293,6 +342,7 @@ export default function App() {
               onDone={() => void completed()}
               onDraft={setDraft}
               offline={offline}
+              initialAppearance={appearance}
             />
           )}
           {page === 'home' && portrait && (

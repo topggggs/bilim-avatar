@@ -1,0 +1,40 @@
+name: bilim-avatar-preview
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bilim
+      POSTGRES_PASSWORD: ${PREVIEW_DB_PASSWORD:?Local secret required}
+      POSTGRES_DB: bilim_preview
+    ports: ['127.0.0.1:55432:5432']
+    volumes: ['preview-pg:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bilim -d bilim_preview']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['127.0.0.1:56379:6379']
+    volumes: ['preview-redis:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  s3:
+    image: rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    restart: unless-stopped
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: bilim_preview
+      RUSTFS_SECRET_KEY: ${PREVIEW_S3_SECRET:?Local secret required}
+    ports: ['127.0.0.1:59000:9000']
+    volumes: ['preview-s3:/data']
+volumes:
+  preview-pg:
+  preview-redis:
+  preview-s3:

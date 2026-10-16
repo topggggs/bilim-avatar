@@ -1,5 +1,12 @@
+import type { ReadinessReport } from './runtime.js';
 import type { SendAuthSms } from './sms.js';
-import { AuthError, type SendAuthMail } from './local-auth.js';
+import {
+  AuthError,
+  hashPassword,
+  verifyPassword,
+  passwordSchema,
+  type SendAuthMail,
+} from './local-auth.js';
 import { developmentRank } from '../../../packages/core/src/ranks.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -64,6 +71,7 @@ export function createApp(
   options: {
     demo: boolean;
     localAuth?: boolean;
+    readiness?: () => Promise<ReadinessReport>;
     sendAuthMail?: SendAuthMail;
     sendAuthSms?: SendAuthSms;
     origin: string;
@@ -106,15 +114,92 @@ export function createApp(
     sendSms: options.sendAuthSms,
   });
   app.use('/api/auth', a.router);
-  app.get('/api/health', (_req, res) =>
-    res.json({ ok: true, mode: options.demo ? 'demo' : 'production' }),
-  );
+  app.get('/api/health', (_req, res) => res.json({ ok: true, status: 'ok' }));
+  app.get('/api/ready', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (options.readiness) {
+      const report = await options.readiness();
+      res.status(report.status === 'not_ready' ? 503 : 200).json(report);
+    } else {
+      await store.read();
+      res.json({ status: 'ready', checks: { storage: 'ready' } });
+    }
+  });
   app.use('/api', (_req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
   });
   app.use('/api', a.middleware);
   app.get('/api/me', (req, res) => res.json(req.user));
+  app.get('/api/account', async (req, res) => {
+    const state = await store.read();
+    const user = state.users.find((u) => u.id === req.user!.id)!;
+    const account = state.accounts.find((a) => a.userId === user.id);
+    res.json({
+      user,
+      contact: account
+        ? { email: account.email, phone: account.phone, verifiedAt: account.verifiedAt }
+        : null,
+      passwordEnabled: !!account,
+      access: user.access ?? 'active',
+    });
+  });
+  app.put('/api/account', async (req, res) => {
+    const body = z
+      .object({ name: z.string().trim().min(2).max(100), position: z.string().trim().max(100) })
+      .strict()
+      .parse(req.body);
+    const user = await store.tx((s) => {
+      const u = s.users.find((u) => u.id === req.user!.id)!;
+      Object.assign(u, body);
+      audit(s, u.id, 'account.updated', u.id);
+      return u;
+    });
+    res.json({ user });
+  });
+  app.post('/api/account/password', async (req, res) => {
+    const body = z
+      .object({ currentPassword: z.string().min(1).max(128), password: passwordSchema })
+      .strict()
+      .parse(req.body);
+    const account = (await store.read()).accounts.find((a) => a.userId === req.user!.id);
+    if (!account || !(await verifyPassword(body.currentPassword, account.passwordHash)))
+      throw new ApiError(400, 'Текущий пароль не подошёл');
+    const next = await hashPassword(body.password);
+    await store.tx((s) => {
+      const a = s.accounts.find((x) => x.id === account.id)!;
+      if (a.passwordHash !== account.passwordHash)
+        throw new ApiError(409, 'Пароль уже изменён. Войдите снова.');
+      a.passwordHash = next;
+      a.sessionVersion += 1;
+      a.failedLogins = 0;
+      a.lockedUntil = undefined;
+      audit(s, a.userId, 'account.password_changed', a.userId);
+    });
+    res
+      .clearCookie('bilim_session', {
+        httpOnly: true,
+        secure: !options.demo,
+        sameSite: 'lax',
+        path: '/api',
+      })
+      .json({ ok: true });
+  });
+  app.use('/api', (req, _res, next) => {
+    if (req.user?.access && req.user.access !== 'active') {
+      next(
+        new ApiError(
+          403,
+          req.user.access === 'pending'
+            ? 'Администратор ещё не подтвердил доступ'
+            : 'Доступ приостановлен',
+          { code: 'ACCESS_PENDING' },
+        ),
+      );
+      return;
+    }
+    next();
+  });
   app.get('/api/learning/link', (req, res) => {
     const value = z
       .string()
@@ -499,19 +584,32 @@ export function createApp(
         position: z.string().max(100),
         role: z.enum(['employee', 'manager', 'methodologist', 'admin']),
         managerId: z.string().optional(),
+        access: z.enum(['pending', 'active', 'suspended']).optional(),
       })
       .strict()
       .parse(req.body);
     await store.tx((s) => {
-      if (body.managerId && !s.users.some((u) => u.id === body.managerId && u.role === 'manager'))
+      if (
+        body.managerId &&
+        (body.managerId === body.id ||
+          !s.users.some((u) => u.id === body.managerId && u.role === 'manager'))
+      )
         throw new ApiError(400, 'Укажите существующего руководителя');
       if (body.sub && s.users.some((u) => u.sub === body.sub && u.id !== body.id))
         throw new ApiError(409, 'OIDC subject уже занят');
-      if (body.id === req.user!.id && body.role !== 'admin')
+      if (
+        body.id === req.user!.id &&
+        (body.role !== 'admin' || (body.access && body.access !== 'active'))
+      )
         throw new ApiError(409, 'Нельзя отозвать собственную роль администратора');
       const index = s.users.findIndex((u) => u.id === body.id);
-      if (index >= 0) s.users[index] = body;
-      else s.users.push(body);
+      if (index >= 0)
+        s.users[index] = {
+          ...s.users[index],
+          ...body,
+          access: body.access ?? s.users[index].access ?? 'active',
+        };
+      else s.users.push({ ...body, access: body.access ?? 'active' });
       audit(s, req.user!.id, 'user.updated', body.id);
     });
     res.json({ ok: true });

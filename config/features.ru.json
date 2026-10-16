@@ -1,0 +1,84 @@
+{
+  "account": {
+    "title": "Настройки аккаунта",
+    "pendingTitle": "Осталось подтвердить доступ",
+    "suspendedTitle": "Доступ приостановлен",
+    "pendingDescription": "Аккаунт создан. Администратор подключит вас к команде.",
+    "suspendedDescription": "Обратитесь к администратору BI Academy.",
+    "checkStatus": "Проверить статус",
+    "saved": "Данные сохранены",
+    "personalData": "Личные данные",
+    "name": "Имя и фамилия",
+    "position": "Должность",
+    "verifiedContact": "Подтверждённый контакт",
+    "save": "Сохранить изменения",
+    "passwordMismatch": "Пароли не совпадают",
+    "changePassword": "Смена пароля",
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль",
+    "repeatPassword": "Повторите новый пароль",
+    "passwordNotice": "После изменения войдите с новым паролем.",
+    "updatePassword": "Изменить пароль"
+  },
+  "avatars": {
+    "title": "Персонажи Bilim",
+    "description": "20 героев. Ваш архетип определит профиль.",
+    "universeLabel": "Вселенная персонажа",
+    "all": "Все",
+    "styleLabel": "Стиль",
+    "genderLabel": "Образ",
+    "selectUniverse": "Выбрать вселенную",
+    "universes": {
+      "cinema": "Кино",
+      "anime": "Аниме",
+      "animals": "Животные",
+      "sport": "Спорт",
+      "fantasy": "Фэнтези"
+    },
+    "styles": {
+      "tech": "Технологичный",
+      "bright": "Яркий",
+      "strict": "Строгий",
+      "calm": "Спокойный"
+    },
+    "genders": {
+      "neutral": "Нейтральный",
+      "female": "Женский",
+      "male": "Мужской"
+    }
+  },
+  "admin": {
+    "connections": "Подключения",
+    "checkNames": {
+      "storage": "База данных",
+      "avatarQueue": "Очередь",
+      "avatarWorker": "Воркер"
+    },
+    "checkStates": {
+      "connected": "Подключено",
+      "unused": "Не используется",
+      "unavailable": "Недоступно"
+    },
+    "serviceNames": {
+      "email": "Почта",
+      "sms": "SMS",
+      "avatars": "Модель изображений"
+    },
+    "serviceStates": {
+      "configured": "Настроено",
+      "preview": "Демо",
+      "fallback": "Резервные герои",
+      "unconfigured": "Не настроено"
+    },
+    "needsAccess": "Нужен доступ",
+    "suspended": "Приостановлен",
+    "oidcSubject": "OIDC subject",
+    "access": "Доступ",
+    "accessLabel": "Статус доступа",
+    "accessStates": {
+      "pending": "Ожидает подтверждения",
+      "active": "Подтверждён",
+      "suspended": "Приостановлен"
+    }
+  }
+}
