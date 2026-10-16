@@ -6,6 +6,13 @@ async function auth(page: Page, role = 'employee') {
     data: { userId: role },
   });
 }
+async function navigate(page: Page, name: string) {
+  await expect(page.locator('.site-header')).toBeVisible();
+  const menu = page.getByRole('button', { name: /Разделы/ });
+  if ((await menu.isVisible()) && (await menu.getAttribute('aria-expanded')) !== 'true')
+    await menu.click();
+  await page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
+}
 async function create(page: Page) {
   await page.getByRole('button', { name: 'Создать аватара', exact: true }).click();
   await page.getByRole('checkbox').check();
@@ -21,6 +28,7 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
+  await navigate(page, 'Мой профиль');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   await create(page);
   await page.getByRole('radio', { name: '4 — нейтрально', exact: true }).click();
@@ -71,7 +79,12 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
 test('руководитель: только команда, профиль без ответов', async ({ page }) => {
   await auth(page, 'manager');
   await page.goto('/');
-  await page.getByRole('button', { name: 'Моя команда', exact: true }).click();
+  await navigate(page, 'Моя команда');
+  await page.getByRole('searchbox', { name: 'Поиск по имени или должности' }).fill('Алина');
+  await expect(page.locator('.team-card')).toHaveCount(1);
+  await page.getByRole('combobox', { name: 'Статус профиля' }).selectOption('empty');
+  await expect(page.getByText('Сотрудники не найдены', { exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Статус профиля' }).selectOption('ready');
   await expect(page.getByRole('button', { name: /Алина Нурланова/ })).toBeVisible();
   await page.getByRole('button', { name: /Алина Нурланова/ }).click();
   await expect(page.getByRole('heading', { name: 'Алина Нурланова', exact: true })).toBeVisible();
@@ -94,13 +107,14 @@ test('телефон 375px: профиль и команда без горизо
   await page.setViewportSize({ width: 375, height: 812 });
   await auth(page, 'employee');
   await page.goto('/');
+  await navigate(page, 'Мой профиль');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
   await page.screenshot({ path: 'docs/profile-mobile.png', fullPage: true });
   await page.getByLabel('Демонстрационная роль').selectOption('manager');
-  await page.getByRole('button', { name: 'Моя команда', exact: true }).click();
+  await navigate(page, 'Моя команда');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -110,12 +124,56 @@ test('телефон 375px: профиль и команда без горизо
 test('доступность: профиль без нарушений WCAG AA', async ({ page }) => {
   await auth(page);
   await page.goto('/');
+  await navigate(page, 'Мой профиль');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
     .analyze();
   expect(
     results.violations.map((v) => ({
+      id: v.id,
+      nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })),
+    })),
+  ).toEqual([]);
+});
+
+test('главная BI: баннеры, свой профиль, маршрут и мобильная версия', async ({ page }) => {
+  await auth(page);
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: 'Стройте своё будущее', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.home-quality-card strong')).toHaveText(['50%', '50%', '50%', '50%']);
+  await page.screenshot({ path: 'docs/site-preview.png' });
+  await page.screenshot({ path: 'docs/home-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: 'Начать развитие', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мой маршрут', exact: true })).toBeVisible();
+  await navigate(page, 'Главная');
+  await page.getByRole('button', { name: 'Следующий слайд' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Сильные стороны. Новые возможности.', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Следующий слайд' }).click();
+  await page.getByRole('button', { name: 'К маршруту', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мой маршрут', exact: true })).toBeVisible();
+  await expect(page.locator('.route-stage')).toHaveCount(4);
+  await page.getByRole('button', { name: 'К модулю', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Модуль пока не подключён.');
+  await page.screenshot({ path: 'docs/route-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await navigate(page, 'Главная');
+  await expect(
+    page.getByRole('heading', { name: 'Стройте своё будущее', exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: 'docs/home-mobile.png', fullPage: true });
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(
+    accessibility.violations.map((v) => ({
       id: v.id,
       nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })),
     })),

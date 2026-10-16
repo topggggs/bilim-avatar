@@ -439,7 +439,7 @@ function Radar({ scores, labels }: { scores: Scores; labels: TestConfig['scales'
           key={v}
           points={scaleIds.map((_, i) => point(i, v)).join(' ')}
           fill="none"
-          stroke="#e2e3ec"
+          stroke="#e1e6f1"
         />
       ))}
       {scaleIds.map((_, i) => (
@@ -449,14 +449,14 @@ function Radar({ scores, labels }: { scores: Scores; labels: TestConfig['scales'
           y1="100"
           x2={point(i, 1).split(',')[0]}
           y2={point(i, 1).split(',')[1]}
-          stroke="#e2e3ec"
+          stroke="#e1e6f1"
         />
       ))}
       <polygon
         points={scaleIds.map((s, i) => point(i, scores[s] / 100)).join(' ')}
-        fill="#8f8bd6"
+        fill="#304fe5"
         fillOpacity=".25"
-        stroke="#8178ca"
+        stroke="#304fe5"
         strokeWidth="2"
       />
       {scaleIds.map((s, i) => (
@@ -465,7 +465,7 @@ function Radar({ scores, labels }: { scores: Scores; labels: TestConfig['scales'
           cx={point(i, scores[s] / 100).split(',')[0]}
           cy={point(i, scores[s] / 100).split(',')[1]}
           r="3.5"
-          fill="#8178ca"
+          fill="#304fe5"
         />
       ))}
       <g fill="#727489" fontSize="10" fontFamily="sans-serif">

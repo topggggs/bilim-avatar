@@ -7,6 +7,8 @@ import { t } from './localization';
 import Admin from './pages/Admin';
 import Methodology from './pages/Methodology';
 import Profile from './pages/Profile';
+import Home from './pages/Home';
+import LearningRoute from './pages/LearningRoute';
 import TestFlow from './pages/TestFlow';
 import { Disclaimer, readDraft, type Draft, type Portrait } from './shared';
 export default function App() {
@@ -14,7 +16,7 @@ export default function App() {
     [demo, setDemo] = useState(false),
     [config, setConfig] = useState<TestConfig | null>(null),
     [portrait, setPortrait] = useState<Portrait | null>(null),
-    [page, setPage] = useState('profile'),
+    [page, setPage] = useState('home'),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
     [offline, setOffline] = useState(!navigator.onLine),
@@ -22,6 +24,9 @@ export default function App() {
     [team, setTeam] = useState<Portrait[]>([]),
     [selected, setSelected] = useState<Portrait | null>(null);
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [teamQuery, setTeamQuery] = useState('');
+  const [teamFilter, setTeamFilter] = useState('all');
   async function load() {
     setLoading(true);
     setError('');
@@ -69,7 +74,7 @@ export default function App() {
           JSON.stringify({ user: u, config: current?.config ?? c, portrait: p }),
         );
       }
-      setPage(u.role === 'methodologist' ? 'method' : u.role === 'admin' ? 'admin' : 'profile');
+      setPage(u.role === 'methodologist' ? 'method' : u.role === 'admin' ? 'admin' : 'home');
     } catch (e) {
       let restored = false;
       if (!navigator.onLine) {
@@ -151,11 +156,13 @@ export default function App() {
       </main>
     );
   const nav = [
+    { id: 'home', text: t('home.nav'), show: ['employee', 'manager'].includes(user.role) },
     {
       id: 'profile',
       text: t('text006'),
       show: ['employee', 'manager'].includes(user.role),
     },
+    { id: 'route', text: t('home.routeNav'), show: ['employee', 'manager'].includes(user.role) },
     { id: 'team', text: t('text007'), show: user.role === 'manager' },
     {
       id: 'method',
@@ -166,53 +173,71 @@ export default function App() {
   ];
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/" aria-label="Bilim">
-          <span className="brand-badge">BI</span>
-          <span>
-            <strong>
-              bilim<span className="brand-dot">.</span>
-            </strong>
-            <small>ACADEMY</small>
-          </span>
-        </a>
-
-        <nav>
+      <header className="site-header">
+        <div className="utility-bar">
+          <span>BI Academy</span>
+          <div>
+            <span>{user.name}</span>
+            <button
+              onClick={async () => {
+                await api('/auth/logout', 'POST');
+                sessionStorage.removeItem('bilim-bootstrap');
+                localStorage.removeItem(`bilim-draft-${user.id}`);
+                setUser(null);
+              }}
+            >
+              {t('text014')}
+            </button>
+          </div>
+        </div>
+        <div className="site-main-header">
+          <button
+            className="site-menu-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="site-navigation"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {t('header.sections')}
+            <span aria-hidden="true">{menuOpen ? '−' : '+'}</span>
+          </button>
+          <a className="brand" href="/" aria-label="Bilim">
+            <span className="brand-badge">BI</span>
+            <strong>BILIM</strong>
+          </a>
+          <button
+            className="site-account"
+            onClick={() =>
+              void navigate(
+                user.role === 'methodologist'
+                  ? 'method'
+                  : user.role === 'admin'
+                    ? 'admin'
+                    : 'profile',
+              )
+            }
+          >
+            {t('header.account')}
+          </button>
+        </div>
+        <nav id="site-navigation" className={`site-nav ${menuOpen ? 'is-open' : ''}`}>
           {nav
             .filter((n) => n.show)
             .map((n) => (
               <button
                 key={n.id}
-                onClick={() => void navigate(n.id)}
+                onClick={() => {
+                  void navigate(n.id);
+                  setMenuOpen(false);
+                }}
                 className={page === n.id ? 'active' : ''}
+                aria-current={page === n.id ? 'page' : undefined}
               >
                 {n.text}
               </button>
             ))}
         </nav>
-        <div className="sidebar-bottom">
-          <button
-            className="logout"
-            onClick={async () => {
-              await api('/auth/logout', 'POST');
-              sessionStorage.removeItem('bilim-bootstrap');
-              localStorage.removeItem(`bilim-draft-${user.id}`);
-              setUser(null);
-            }}
-          >
-            {t('text014')}
-          </button>
-        </div>
-      </aside>
+      </header>
       <div className="main-shell">
-        <header className="topbar">
-          <div className="top-actions">
-            <div className="user-info">
-              <strong>{user.name}</strong>
-              <small>{user.position}</small>
-            </div>
-          </div>
-        </header>
         {demo && (
           <div className="demo-bar">
             <span>{t('text017')}</span>
@@ -253,6 +278,17 @@ export default function App() {
               offline={offline}
             />
           )}
+          {page === 'home' && portrait && (
+            <Home
+              portrait={portrait}
+              hasDraft={!!draft}
+              onNavigate={(p) => void navigate(p)}
+              onStart={() => setPage('create')}
+            />
+          )}
+          {page === 'route' && portrait && (
+            <LearningRoute portrait={portrait} onStart={() => setPage('create')} />
+          )}
           {page === 'profile' && portrait && (
             <Profile
               portrait={portrait}
@@ -281,34 +317,70 @@ export default function App() {
                   <Profile portrait={selected} config={config!} readOnly />
                 </>
               ) : (
-                <div className="team-grid">
-                  {team.map((p) => (
-                    <button
-                      className="team-card panel"
-                      key={p.user.id}
-                      onClick={() => setSelected(p)}
+                <>
+                  <div className="team-toolbar">
+                    <input
+                      type="search"
+                      aria-label={t('home.searchTeam')}
+                      placeholder={t('home.searchTeam')}
+                      value={teamQuery}
+                      onChange={(e) => setTeamQuery(e.target.value)}
+                    />
+                    <select
+                      aria-label={t('home.teamFilter')}
+                      value={teamFilter}
+                      onChange={(e) => setTeamFilter(e.target.value)}
                     >
-                      <div className="team-avatar">
-                        {p.avatar && <img src={p.avatar.imageUrl} alt={p.avatar.name} />}
-                      </div>
-                      <h3>{p.user.name}</h3>
-                      <p>{p.user.position}</p>
-                      {p.result ? (
-                        <div className="mini-scores">
-                          {scaleIds.map((s) => (
-                            <div key={s}>
-                              <span>{p.scales[s].short}</span>
-                              <b>{p.result!.percentages[s]}%</b>
+                      <option value="all">{t('home.teamAll')}</option>
+                      <option value="ready">{t('home.teamReady')}</option>
+                      <option value="empty">{t('home.teamEmpty')}</option>
+                    </select>
+                  </div>
+                  <div className="team-grid">
+                    {team
+                      .filter(
+                        (p) =>
+                          `${p.user.name} ${p.user.position}`
+                            .toLocaleLowerCase('ru')
+                            .includes(teamQuery.trim().toLocaleLowerCase('ru')) &&
+                          (teamFilter === 'all' ||
+                            (teamFilter === 'ready' ? !!p.result : !p.result)),
+                      )
+                      .map((p) => (
+                        <button
+                          className="team-card panel"
+                          key={p.user.id}
+                          onClick={() => setSelected(p)}
+                        >
+                          <div className="team-avatar">
+                            {p.avatar && <img src={p.avatar.imageUrl} alt={p.avatar.name} />}
+                          </div>
+                          <h3>{p.user.name}</h3>
+                          <p>{p.user.position}</p>
+                          {p.result ? (
+                            <div className="mini-scores">
+                              {scaleIds.map((s) => (
+                                <div key={s}>
+                                  <span>{p.scales[s].short}</span>
+                                  <b>{p.result!.percentages[s]}%</b>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="pill neutral">{t('text032')}</span>
-                      )}
-                      <span className="team-link">{t('text033')}</span>
-                    </button>
-                  ))}
-                </div>
+                          ) : (
+                            <span className="pill neutral">{t('text032')}</span>
+                          )}
+                          <span className="team-link">{t('text033')}</span>
+                        </button>
+                      ))}
+                  </div>
+                  {!team.some(
+                    (p) =>
+                      `${p.user.name} ${p.user.position}`
+                        .toLocaleLowerCase('ru')
+                        .includes(teamQuery.trim().toLocaleLowerCase('ru')) &&
+                      (teamFilter === 'all' || (teamFilter === 'ready' ? !!p.result : !p.result)),
+                  ) && <p className="empty-state">{t('home.noMatches')}</p>}
+                </>
               )}
               {!selected && <Disclaimer />}
             </>
@@ -322,6 +394,10 @@ export default function App() {
           )}
           {page === 'admin' && <Admin />}
         </main>
+        <footer className="site-footer">
+          <span>BI Academy</span>
+          <span>Bilim · 2026</span>
+        </footer>
       </div>
     </div>
   );
