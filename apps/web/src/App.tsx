@@ -1,8 +1,9 @@
+import Auth, { readAuthLink, type AuthMode } from './pages/Auth';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { scaleIds, type TestConfig } from '../../../packages/core/src/index';
 import type { Session, User } from '../../api/src/store';
-import { api } from './api';
+import { api, HttpError } from './api';
 import { t } from './localization';
 import Admin from './pages/Admin';
 import Methodology from './pages/Methodology';
@@ -12,6 +13,14 @@ import LearningRoute from './pages/LearningRoute';
 import TestFlow from './pages/TestFlow';
 import { Disclaimer, readDraft, type Draft, type Portrait } from './shared';
 export default function App() {
+  const [authLink, setAuthLink] = useState(readAuthLink);
+  const [authMode, setAuthMode] = useState<AuthMode>({
+    demo: false,
+    local: false,
+    oidc: true,
+    preview: false,
+    phone: false,
+  });
   const [user, setUser] = useState<User | null>(null),
     [demo, setDemo] = useState(false),
     [config, setConfig] = useState<TestConfig | null>(null),
@@ -33,15 +42,8 @@ export default function App() {
     try {
       const mode = await api('/auth/mode');
       setDemo(mode.demo);
-      let u: User;
-      try {
-        u = await api('/me');
-      } catch (e) {
-        if (mode.demo) {
-          await api('/auth/demo', 'POST', { userId: 'employee' });
-          u = await api('/me');
-        } else throw e;
-      }
+      setAuthMode(mode);
+      const u = await api<User>('/me');
       setUser(u);
       const c = await api<TestConfig>('/test/config');
       setConfig(c);
@@ -90,7 +92,14 @@ export default function App() {
           }
         } catch {}
       }
-      if (!restored) setError(e instanceof Error ? e.message : t('text001'));
+      if (!restored) {
+        if (e instanceof HttpError && e.status === 401) {
+          setUser(null);
+          setPortrait(null);
+          setDraft(null);
+          sessionStorage.removeItem('bilim-bootstrap');
+        } else setError(e instanceof Error ? e.message : t('text001'));
+      }
     } finally {
       setLoading(false);
     }
@@ -98,9 +107,15 @@ export default function App() {
   useEffect(() => {
     void load();
     const online = () => setOffline(!navigator.onLine);
+    const authHash = () => {
+      const next = readAuthLink();
+      if (next) setAuthLink(next);
+    };
+    window.addEventListener('hashchange', authHash);
     window.addEventListener('online', online);
     window.addEventListener('offline', online);
     return () => {
+      window.removeEventListener('hashchange', authHash);
       window.removeEventListener('online', online);
       window.removeEventListener('offline', online);
     };
@@ -144,16 +159,18 @@ export default function App() {
         <p>{t('text002')}</p>
       </div>
     );
-  if (!user)
+  if (!user || authLink)
     return (
-      <main className="login">
-        <div className="brand-badge">BI</div>
-        <h1>{t('text003')}</h1>
-        <p>{error || t('text004')}</p>
-        <a className="button primary" href="/api/auth/login">
-          {t('text005')}
-        </a>
-      </main>
+      <Auth
+        key={authLink?.token ?? 'entry'}
+        mode={authMode}
+        link={authLink}
+        initialError={error}
+        onDone={async () => {
+          setAuthLink(null);
+          await load();
+        }}
+      />
     );
   const nav = [
     { id: 'home', text: t('home.nav'), show: ['employee', 'manager'].includes(user.role) },
@@ -238,7 +255,7 @@ export default function App() {
         </nav>
       </header>
       <div className="main-shell">
-        {demo && (
+        {demo && ['employee', 'manager', 'methodologist', 'admin'].includes(user.id) && (
           <div className="demo-bar">
             <span>{t('text017')}</span>
             <label>

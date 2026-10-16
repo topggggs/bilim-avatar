@@ -63,7 +63,44 @@ export type DevelopmentRecord = {
   reviewedBy?: string;
 };
 export type Audit = { id: string; at: string; actorId: string; action: string; target: string };
+export type Account = {
+  id: string;
+  userId: string;
+  email?: string;
+  phone?: string;
+  passwordHash: string;
+  sessionVersion: number;
+  failedLogins?: number;
+  lockedUntil?: string;
+  createdAt: string;
+  verifiedAt: string;
+  consentAt: string;
+  consentVersion: string;
+};
+export type AuthToken = {
+  id: string;
+  hash: string;
+  email?: string;
+  phone?: string;
+  kind: 'signup' | 'reset';
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string;
+};
+export type PhoneChallenge = {
+  id: string;
+  phone: string;
+  hash: string;
+  kind: 'signup' | 'reset';
+  attempts: number;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string;
+};
 export type State = {
+  phoneChallenges: PhoneChallenge[];
+  accounts: Account[];
+  authTokens: AuthToken[];
   development: DevelopmentRecord[];
   users: User[];
   sessions: Session[];
@@ -78,6 +115,9 @@ export function audit(s: State, actorId: string, action: string, target: string)
 export function initialState(demo: boolean): State {
   const config = configSchema.parse(seed);
   const s: State = {
+    phoneChallenges: [],
+    accounts: [],
+    authTokens: [],
     development: [],
     users: [],
     sessions: [],
@@ -181,7 +221,13 @@ export class MemoryStore implements Store {
   protected state: State;
   private tail: Promise<unknown> = Promise.resolve();
   constructor(state = initialState(true)) {
-    this.state = { ...state, development: state.development ?? [] };
+    this.state = {
+      ...state,
+      development: state.development ?? [],
+      phoneChallenges: state.phoneChallenges ?? [],
+      accounts: state.accounts ?? [],
+      authTokens: state.authTokens ?? [],
+    };
   }
   async read() {
     await this.tail;
@@ -217,6 +263,9 @@ export class FileStore extends MemoryStore {
       s = initialState(demo);
     }
     s.development ??= [];
+    s.phoneChallenges ??= [];
+    s.accounts ??= [];
+    s.authTokens ??= [];
     const store = new FileStore(filename, s);
     await store.persist(s);
     return store;
@@ -240,6 +289,11 @@ CREATE TABLE IF NOT EXISTS results(session_id text PRIMARY KEY REFERENCES sessio
 CREATE TABLE IF NOT EXISTS recommendations_shown(session_id text PRIMARY KEY REFERENCES sessions(id),payload jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS avatars(id text PRIMARY KEY,session_id text NOT NULL REFERENCES sessions(id),user_id text NOT NULL REFERENCES users(id),payload jsonb NOT NULL);
 CREATE INDEX IF NOT EXISTS avatars_user_idx ON avatars(user_id);
+CREATE TABLE IF NOT EXISTS local_accounts(id text PRIMARY KEY,user_id text NOT NULL UNIQUE REFERENCES users(id),email text UNIQUE,phone text UNIQUE,payload jsonb NOT NULL,CHECK ((email IS NULL) <> (phone IS NULL)));
+ALTER TABLE local_accounts ADD COLUMN IF NOT EXISTS phone text UNIQUE;
+ALTER TABLE local_accounts ALTER COLUMN email DROP NOT NULL;
+CREATE TABLE IF NOT EXISTS phone_challenges(id text PRIMARY KEY,payload jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS auth_tokens(id text PRIMARY KEY,payload jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS development_records(id text PRIMARY KEY,user_id text NOT NULL REFERENCES users(id),recommendation_id text NOT NULL,payload jsonb NOT NULL,UNIQUE(user_id,recommendation_id));
 CREATE TABLE IF NOT EXISTS audit_log(id text PRIMARY KEY,at timestamptz NOT NULL,actor_id text NOT NULL,action text NOT NULL,target text NOT NULL);
 `;
@@ -283,6 +337,9 @@ export class PostgresStore implements Store {
         await db.query('SELECT id,at,actor_id AS "actorId",action,target FROM audit_log')
       ).rows.map((x) => ({ ...x, at: new Date(x.at).toISOString() }));
       const s: State = {
+        phoneChallenges: await get('phone_challenges'),
+        accounts: await get('local_accounts'),
+        authTokens: await get('auth_tokens'),
         development: await get('development_records'),
         versions,
         users,
@@ -306,6 +363,17 @@ export class PostgresStore implements Store {
           'INSERT INTO users VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET subject=$2,manager_id=$3,payload=$4',
           [u.id, u.sub ?? null, u.managerId ?? null, u],
         );
+      for (const account of s.accounts)
+        await db.query(
+          'INSERT INTO local_accounts(id,user_id,email,phone,payload) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET payload=$5',
+          [account.id, account.userId, account.email ?? null, account.phone ?? null, account],
+        );
+      await db.query('DELETE FROM phone_challenges');
+      for (const challenge of s.phoneChallenges)
+        await db.query('INSERT INTO phone_challenges VALUES($1,$2)', [challenge.id, challenge]);
+      await db.query('DELETE FROM auth_tokens');
+      for (const token of s.authTokens)
+        await db.query('INSERT INTO auth_tokens VALUES($1,$2)', [token.id, token]);
       for (const record of s.development)
         await db.query(
           'INSERT INTO development_records VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET payload=$4',
@@ -366,6 +434,6 @@ export async function createStore() {
   }
   return FileStore.open(
     path.resolve(process.env.DATA_DIR ?? '.data', 'state.json'),
-    process.env.AUTH_MODE !== 'oidc',
+    (process.env.AUTH_MODE ?? 'demo') === 'demo',
   );
 }

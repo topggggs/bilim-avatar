@@ -12,6 +12,8 @@ export async function api<T = any>(url: string, method = 'GET', body?: unknown):
     credentials: 'same-origin',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+  }).catch(() => {
+    throw new Error('Нет соединения. Проверьте сеть и попробуйте ещё раз.');
   });
   const data = await r.json();
   if (!r.ok) throw new HttpError(r.status, data);

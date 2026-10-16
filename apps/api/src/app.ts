@@ -1,3 +1,5 @@
+import type { SendAuthSms } from './sms.js';
+import { AuthError, type SendAuthMail } from './local-auth.js';
 import { developmentRank } from '../../../packages/core/src/ranks.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -61,6 +63,9 @@ export function createApp(
   store: Store,
   options: {
     demo: boolean;
+    localAuth?: boolean;
+    sendAuthMail?: SendAuthMail;
+    sendAuthSms?: SendAuthSms;
     origin: string;
     enqueue?: (id: string) => Promise<void>;
     image?: (a: Avatar) => Promise<string>;
@@ -95,11 +100,19 @@ export function createApp(
     }
     next();
   });
-  const a = auth(store, options.demo, options.origin);
+  const a = auth(store, options.demo, options.origin, {
+    local: options.localAuth,
+    sendMail: options.sendAuthMail,
+    sendSms: options.sendAuthSms,
+  });
   app.use('/api/auth', a.router);
   app.get('/api/health', (_req, res) =>
     res.json({ ok: true, mode: options.demo ? 'demo' : 'production' }),
   );
+  app.use('/api', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
   app.use('/api', a.middleware);
   app.get('/api/me', (req, res) => res.json(req.user));
   app.get('/api/learning/link', (req, res) => {
@@ -481,7 +494,7 @@ export function createApp(
     const body = z
       .object({
         id: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
-        sub: z.string().min(1),
+        sub: z.string().min(1).optional(),
         name: z.string().min(1).max(100),
         position: z.string().max(100),
         role: z.enum(['employee', 'manager', 'methodologist', 'admin']),
@@ -492,7 +505,7 @@ export function createApp(
     await store.tx((s) => {
       if (body.managerId && !s.users.some((u) => u.id === body.managerId && u.role === 'manager'))
         throw new ApiError(400, 'Укажите существующего руководителя');
-      if (s.users.some((u) => u.sub === body.sub && u.id !== body.id))
+      if (body.sub && s.users.some((u) => u.sub === body.sub && u.id !== body.id))
         throw new ApiError(409, 'OIDC subject уже занят');
       if (body.id === req.user!.id && body.role !== 'admin')
         throw new ApiError(409, 'Нельзя отозвать собственную роль администратора');
@@ -505,6 +518,10 @@ export function createApp(
   });
   app.use(
     (error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      if (error instanceof AuthError) {
+        res.status(error.status).json({ error: error.message, fields: error.fields });
+        return;
+      }
       if (error instanceof ApiError) {
         res.status(error.status).json({ error: error.message, ...error.details });
         return;
@@ -513,6 +530,10 @@ export function createApp(
         res.status(400).json({
           error: 'Проверьте формат данных',
           issues: error instanceof z.ZodError ? error.issues : undefined,
+          fields:
+            error instanceof z.ZodError && _req.path.startsWith('/api/auth')
+              ? Object.fromEntries(error.issues.map((i) => [i.path[0], i.message]))
+              : undefined,
         });
         return;
       }

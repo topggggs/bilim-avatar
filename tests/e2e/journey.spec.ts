@@ -27,6 +27,7 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await auth(page);
   await page.goto('/');
   await navigate(page, 'Мой профиль');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();

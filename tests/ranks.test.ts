@@ -41,9 +41,15 @@ describe('ранги развития', () => {
       const filename = path.join(dir, 'state.json');
       const legacy = initialState(true) as Partial<ReturnType<typeof initialState>>;
       delete legacy.development;
+      delete legacy.accounts;
+      delete legacy.authTokens;
+      delete legacy.phoneChallenges;
       await writeFile(filename, JSON.stringify(legacy));
       const store = await FileStore.open(filename, true);
       expect((await store.read()).development).toEqual([]);
+      expect((await store.read()).accounts).toEqual([]);
+      expect((await store.read()).authTokens).toEqual([]);
+      expect((await store.read()).phoneChallenges).toEqual([]);
       await store.tx((s) =>
         s.development.push({
           id: 'a',

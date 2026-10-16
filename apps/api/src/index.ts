@@ -6,23 +6,21 @@ import { createStore } from './store.js';
 import { createApp } from './app.js';
 import { avatarQueue, imageUrl, generate } from './generation.js';
 const demo = (process.env.AUTH_MODE ?? 'demo') === 'demo';
+const local = process.env.AUTH_MODE === 'local';
 if (process.env.NODE_ENV === 'production' && (demo || process.env.STORAGE_MODE !== 'postgres'))
-  throw Error('Production requires OIDC and PostgreSQL');
-if (!demo)
-  for (const key of [
+  throw Error('Production requires local or OIDC authentication and PostgreSQL');
+if (!demo) {
+  const required = [
     'SESSION_SECRET',
-    'OIDC_ISSUER',
-    'OIDC_CLIENT_ID',
-    'OIDC_CLIENT_SECRET',
-    'OIDC_REDIRECT_URI',
     'APP_ORIGIN',
-  ])
-    if (!process.env[key]) throw Error(`Missing ${key}`);
-if (
-  !demo &&
-  (process.env.SESSION_SECRET!.length < 32 || !process.env.APP_ORIGIN!.startsWith('https://'))
-)
-  throw Error('Production requires HTTPS and a strong session secret');
+    ...(local
+      ? ['SMTP_HOST', 'SMTP_FROM', 'REGISTRATION_DOMAINS']
+      : ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_REDIRECT_URI']),
+  ];
+  for (const key of required) if (!process.env[key]) throw Error(`Missing ${key}`);
+  if (process.env.SESSION_SECRET!.length < 32 || !process.env.APP_ORIGIN!.startsWith('https://'))
+    throw Error('Production requires HTTPS and a strong session secret');
+}
 const store = await createStore();
 const queue = process.env.REDIS_URL ? avatarQueue() : undefined;
 const app = createApp(store, {
@@ -55,7 +53,7 @@ const recovery = setInterval(() => {
 }, 1000);
 const server = app.listen(Number(process.env.PORT ?? 3001), '0.0.0.0', () =>
   console.log(
-    `Bilim API http://localhost:${process.env.PORT ?? 3001} (${demo ? 'synthetic demo' : 'OIDC'})`,
+    `Bilim API http://localhost:${process.env.PORT ?? 3001} (${demo ? 'synthetic demo' : local ? 'email authentication' : 'OIDC'})`,
   ),
 );
 for (const signal of ['SIGTERM', 'SIGINT'])

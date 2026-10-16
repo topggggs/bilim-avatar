@@ -32,7 +32,11 @@ export default function Admin() {
     e.preventDefault();
     setError('');
     try {
-      await api('/admin/users', 'POST', { ...form, managerId: form.managerId || undefined });
+      await api('/admin/users', 'POST', {
+        ...form,
+        sub: form.sub || undefined,
+        managerId: form.managerId || undefined,
+      });
       setNotice(t('text224'));
       await load();
     } catch (e) {
@@ -92,7 +96,7 @@ export default function Admin() {
             <label className="form-label" key={f.id}>
               {f.label}
               <input
-                required
+                required={f.id !== 'sub'}
                 value={form[f.id as keyof typeof form]}
                 onChange={(e) => setForm({ ...form, [f.id]: e.target.value })}
               />

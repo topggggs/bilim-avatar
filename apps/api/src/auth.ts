@@ -1,3 +1,5 @@
+import { smsConfigured, type SendAuthSms } from './sms.js';
+import { localAuth, type SendAuthMail } from './local-auth.js';
 import { randomBytes, createHash } from 'node:crypto';
 import { Router, type RequestHandler } from 'express';
 import { SignJWT, jwtVerify, createRemoteJWKSet } from 'jose';
@@ -10,7 +12,15 @@ declare global {
     }
   }
 }
-export function auth(store: Store, demo: boolean, origin: string) {
+export function auth(
+  store: Store,
+  demo: boolean,
+  origin: string,
+  options: { local?: boolean; sendMail?: SendAuthMail; sendSms?: SendAuthSms } = {},
+) {
+  const local = options.local ?? (demo || process.env.AUTH_MODE === 'local');
+  const preview = demo && process.env.NODE_ENV !== 'production';
+  const phone = local && (preview || !!options.sendSms || smsConfigured());
   const secret = new TextEncoder().encode(
     process.env.SESSION_SECRET ?? randomBytes(32).toString('hex'),
   );
@@ -31,8 +41,14 @@ export function auth(store: Store, demo: boolean, origin: string) {
         return;
       }
       const { payload } = await jwtVerify(raw, secret, { algorithms: ['HS256'] });
+      const allowedKinds = demo ? ['demo', 'local'] : local ? ['local'] : ['oidc'];
+      if (!allowedKinds.includes(String(payload.kind))) throw Error('Authentication mode changed');
       const state = await store.read();
       req.user = state.users.find((u) => u.id === payload.uid);
+      const account =
+        payload.kind === 'local' ? state.accounts.find((a) => a.userId === payload.uid) : undefined;
+      if (payload.kind === 'local' && (!account || account.sessionVersion !== payload.sv))
+        throw Error('Session revoked');
       if (!req.user) {
         res.status(401).json({ error: 'Нет доступа к Bilim' });
         return;
@@ -42,7 +58,33 @@ export function auth(store: Store, demo: boolean, origin: string) {
       res.status(401).json({ error: 'Сессия истекла. Войдите снова.' });
     }
   };
-  router.get('/mode', (_req, res) => res.json({ demo }));
+  router.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+  router.get('/mode', (_req, res) =>
+    res.json({ demo, local, oidc: !demo && !local, preview, phone }),
+  );
+  if (local)
+    router.use(
+      localAuth(store, {
+        origin,
+        preview,
+        sendMail: options.sendMail,
+        sendSms: options.sendSms,
+        phone,
+        otpSecret: secret,
+        domains: process.env.REGISTRATION_DOMAINS?.split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+        signIn: async (res, uid, sv) => {
+          res.cookie('bilim_session', await token({ uid, sv, kind: 'local' }), {
+            ...cookie,
+            maxAge: 8 * 3600000,
+          });
+        },
+      }),
+    );
   router.post('/demo', async (req, res) => {
     if (!demo) {
       res.sendStatus(404);
@@ -54,11 +96,21 @@ export function auth(store: Store, demo: boolean, origin: string) {
       res.sendStatus(400);
       return;
     }
-    res.cookie('bilim_session', await token({ uid: id }), cookie).json({ ok: true });
+    res.cookie('bilim_session', await token({ uid: id, kind: 'demo' }), cookie).json({ ok: true });
   });
-  router.post('/logout', (_req, res) =>
-    res.clearCookie('bilim_session', cookie).json({ ok: true }),
-  );
+  router.post('/logout', async (req, res) => {
+    try {
+      const { payload } = await jwtVerify(req.cookies?.bilim_session, secret, {
+        algorithms: ['HS256'],
+      });
+      if (payload.kind === 'local')
+        await store.tx((s) => {
+          const a = s.accounts.find((x) => x.userId === payload.uid);
+          if (a && a.sessionVersion === payload.sv) a.sessionVersion += 1;
+        });
+    } catch {}
+    res.clearCookie('bilim_session', cookie).json({ ok: true });
+  });
   let discovery:
     | Promise<{
         issuer: string;
@@ -81,7 +133,7 @@ export function auth(store: Store, demo: boolean, origin: string) {
   }
   router.get('/login', async (_req, res, next) => {
     try {
-      if (demo) {
+      if (demo || local) {
         res.redirect(origin);
         return;
       }
@@ -111,7 +163,7 @@ export function auth(store: Store, demo: boolean, origin: string) {
   });
   router.get('/callback', async (req, res, next) => {
     try {
-      if (demo) {
+      if (demo || local) {
         res.sendStatus(404);
         return;
       }
@@ -163,7 +215,9 @@ export function auth(store: Store, demo: boolean, origin: string) {
         res.status(403).send('Учётная запись не подключена к Bilim. Обратитесь к администратору.');
         return;
       }
-      res.cookie('bilim_session', await token({ uid: user.id }), cookie).redirect(origin);
+      res
+        .cookie('bilim_session', await token({ uid: user.id, kind: 'oidc' }), cookie)
+        .redirect(origin);
     } catch (e) {
       next(e);
     }
