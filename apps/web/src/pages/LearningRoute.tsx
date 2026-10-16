@@ -1,3 +1,4 @@
+import RankCard from '../RankCard';
 import { useState } from 'react';
 import { api } from '../api';
 import { t } from '../localization';
@@ -6,9 +7,11 @@ import { Disclaimer, type Portrait } from '../shared';
 export default function LearningRoute({
   portrait: p,
   onStart,
+  refresh,
 }: {
   portrait: Portrait;
   onStart: () => void;
+  refresh: () => Promise<void>;
 }) {
   const [notice, setNotice] = useState('');
   const [recPage, setRecPage] = useState(0);
@@ -48,6 +51,7 @@ export default function LearningRoute({
       <div className="page-title">
         <h1>{t('home.routeNav')}</h1>
       </div>
+      <RankCard portrait={p} tasks refresh={refresh} />
       <div className="route-stages">
         {steps.map((s, i) => (
           <article key={s.name} className={`route-stage ${s.status}`}>

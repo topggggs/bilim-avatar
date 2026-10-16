@@ -1,3 +1,4 @@
+import { developmentRank } from '../../../packages/core/src/ranks.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -270,6 +271,23 @@ export function createApp(
     const active = s.versions.find((x) => x.version === s.activeVersion)!;
     return {
       user: { id: u.id, name: u.name, role: u.role, position: u.position },
+      development: {
+        rank: developmentRank(
+          !!session,
+          s.development
+            .filter((x) => x.userId === u.id && x.status === 'approved')
+            .map((x) => x.recommendationId),
+        ),
+        records: s.development.filter((x) => x.userId === u.id),
+        tasks: session
+          ? c.recommendations.map(({ id, title, text, durationDays }) => ({
+              id,
+              title,
+              text,
+              durationDays,
+            }))
+          : [],
+      },
       result: session?.result ?? null,
       completedAt: session?.completedAt,
       sessionId: session?.id,
@@ -297,6 +315,60 @@ export function createApp(
       return portrait(s, target);
     });
     res.json(out);
+  });
+  app.post('/api/development/submit', async (req, res) => {
+    const body = z
+      .object({
+        recommendationId: z.string().min(1).max(100),
+        evidence: z.string().trim().min(10).max(1000),
+      })
+      .strict()
+      .parse(req.body);
+    const record = await store.tx((s) => {
+      const session = latest(s, req.user!.id);
+      if (!session) throw new ApiError(409, 'Сначала пройдите тест');
+      const config = s.versions.find((x) => x.version === session.version)!;
+      const task = config.recommendations.find((x) => x.id === body.recommendationId);
+      if (!task) throw new ApiError(404, 'Практика не найдена');
+      const previous = s.development.find(
+        (x) => x.userId === req.user!.id && x.recommendationId === task.id,
+      );
+      if (previous && previous.status !== 'returned')
+        throw new ApiError(409, 'Практика уже отправлена или подтверждена');
+      const next = {
+        id: previous?.id ?? randomUUID(),
+        userId: req.user!.id,
+        recommendationId: task.id,
+        title: task.title,
+        evidence: body.evidence,
+        status: 'pending' as const,
+        submittedAt: new Date().toISOString(),
+      };
+      if (previous) s.development[s.development.indexOf(previous)] = next;
+      else s.development.push(next);
+      audit(s, req.user!.id, 'development.submitted', next.id);
+      return next;
+    });
+    res.status(201).json(record);
+  });
+  app.post('/api/development/:id/review', async (req, res) => {
+    requireRole(req.user!, ['manager']);
+    const body = z
+      .object({ decision: z.enum(['approved', 'returned']) })
+      .strict()
+      .parse(req.body);
+    await store.tx((s) => {
+      const record = s.development.find((x) => x.id === req.params.id);
+      const target = s.users.find((x) => x.id === record?.userId);
+      if (!record || !target || target.id === req.user!.id || target.managerId !== req.user!.id)
+        throw new ApiError(403, 'Практика недоступна');
+      if (record.status !== 'pending') throw new ApiError(409, 'Практика уже проверена');
+      record.status = body.decision;
+      record.reviewedAt = new Date().toISOString();
+      record.reviewedBy = req.user!.id;
+      audit(s, req.user!.id, `development.${body.decision}`, record.id);
+    });
+    res.json({ ok: true });
   });
   app.get('/api/team', async (req, res) => {
     requireRole(req.user!, ['manager']);

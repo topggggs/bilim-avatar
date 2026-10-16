@@ -84,7 +84,9 @@ export default function Home({
         </section>
         <div className="home-side-cards">
           <section className="home-action-card blue">
-            <span className="card-category">{t('home.profileLabel')}</span>
+            <span className="card-category">
+              {t('home.profileLabel')} · {p.development.rank.current.name}
+            </span>
             <h2>
               {p.result ? (p.avatar?.name ?? t('home.profileReady')) : t('home.profileCreate')}
             </h2>

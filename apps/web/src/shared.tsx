@@ -5,11 +5,17 @@ import {
   type Scores,
   type TestConfig,
 } from '../../../packages/core/src/index';
-import type { Session, User } from '../../api/src/store';
+import type { DevelopmentRank } from '../../../packages/core/src/ranks';
+import type { DevelopmentRecord, Session, User } from '../../api/src/store';
 import { t } from './localization';
 export { ui };
 export const levelLabels = { low: t('text036'), medium: t('text037'), high: t('text038') };
 export type Portrait = {
+  development: {
+    rank: DevelopmentRank;
+    records: DevelopmentRecord[];
+    tasks: { id: string; title: string; text: string; durationDays: number }[];
+  };
   user: User;
   result: Result | null;
   completedAt?: string;

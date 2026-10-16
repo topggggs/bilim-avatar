@@ -287,7 +287,11 @@ export default function App() {
             />
           )}
           {page === 'route' && portrait && (
-            <LearningRoute portrait={portrait} onStart={() => setPage('create')} />
+            <LearningRoute
+              portrait={portrait}
+              onStart={() => setPage('create')}
+              refresh={async () => setPortrait(await api(`/profile/${user.id}`))}
+            />
           )}
           {page === 'profile' && portrait && (
             <Profile
@@ -314,7 +318,19 @@ export default function App() {
                   <button className="text-button back-team" onClick={() => setSelected(null)}>
                     {t('text030')}
                   </button>
-                  <Profile portrait={selected} config={config!} readOnly />
+                  <Profile
+                    key={selected.user.id}
+                    portrait={selected}
+                    config={config!}
+                    readOnly
+                    refresh={async () => {
+                      const updated = await api<Portrait>(`/profile/${selected.user.id}`);
+                      setSelected(updated);
+                      setTeam((items) =>
+                        items.map((item) => (item.user.id === updated.user.id ? updated : item)),
+                      );
+                    }}
+                  />
                 </>
               ) : (
                 <>
@@ -357,6 +373,7 @@ export default function App() {
                           </div>
                           <h3>{p.user.name}</h3>
                           <p>{p.user.position}</p>
+                          <span className="team-rank">{p.development.rank.current.name}</span>
                           {p.result ? (
                             <div className="mini-scores">
                               {scaleIds.map((s) => (
@@ -368,6 +385,12 @@ export default function App() {
                             </div>
                           ) : (
                             <span className="pill neutral">{t('text032')}</span>
+                          )}
+                          {p.development.records.some((r) => r.status === 'pending') && (
+                            <span className="rank-status">
+                              {t('rank.pending')}:{' '}
+                              {p.development.records.filter((r) => r.status === 'pending').length}
+                            </span>
                           )}
                           <span className="team-link">{t('text033')}</span>
                         </button>

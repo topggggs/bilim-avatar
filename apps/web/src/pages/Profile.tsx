@@ -1,3 +1,4 @@
+import RankCard from '../RankCard';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { scaleIds, type Scores, type TestConfig } from '../../../../packages/core/src/index';
@@ -115,6 +116,7 @@ export default function Profile({
         </div>
         {r && <div className="date-tag">{date(p.completedAt!)}</div>}
       </div>
+      <RankCard portrait={p} review={readOnly} refresh={refresh} />
       {!r ? (
         <>
           <section className="welcome-hero">

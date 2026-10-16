@@ -1,0 +1,27 @@
+[
+  {
+    "id": "start",
+    "name": "Старт",
+    "points": 0
+  },
+  {
+    "id": "practitioner",
+    "name": "Практик",
+    "points": 1
+  },
+  {
+    "id": "specialist",
+    "name": "Специалист",
+    "points": 2
+  },
+  {
+    "id": "expert",
+    "name": "Эксперт",
+    "points": 4
+  },
+  {
+    "id": "mentor",
+    "name": "Наставник",
+    "points": 6
+  }
+]

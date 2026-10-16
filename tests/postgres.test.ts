@@ -9,10 +9,22 @@ it.skipIf(!process.env.TEST_DATABASE_URL)(
     const store = new PostgresStore(url);
     await store.init();
     await store.pool.query(
-      'TRUNCATE audit_log,avatars,recommendations_shown,results,answers,sessions,users,test_versions,app_settings CASCADE',
+      'TRUNCATE development_records,audit_log,avatars,recommendations_shown,results,answers,sessions,users,test_versions,app_settings CASCADE',
     );
     const seed = initialState(true);
     await store.tx((s) => Object.assign(s, seed));
+    await store.tx((s) =>
+      s.development.push({
+        id: 'practice-1',
+        userId: 'employee-2',
+        recommendationId: 'rec-1',
+        title: 'Практика',
+        evidence: 'Проверил план и обсудил результат',
+        status: 'approved',
+        submittedAt: new Date().toISOString(),
+        reviewedBy: 'manager',
+      }),
+    );
     const before = await store.read();
     expect(before.sessions).toHaveLength(2);
     expect(before.sessions[0].answers).toBeTruthy();
@@ -35,6 +47,7 @@ it.skipIf(!process.env.TEST_DATABASE_URL)(
     expect(state.audit).toHaveLength(10);
     expect(state.sessions[0].result?.percentages).toEqual(before.sessions[0].result?.percentages);
     expect(state.avatars).toHaveLength(2);
+    expect(state.development).toEqual(before.development);
     expect((await reopened.pool.query('SELECT * FROM recommendations_shown')).rows).toHaveLength(2);
     await reopened.close();
   },

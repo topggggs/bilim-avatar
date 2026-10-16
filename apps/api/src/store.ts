@@ -51,8 +51,20 @@ export type Avatar = {
   fixed: boolean;
   error?: string;
 };
+export type DevelopmentRecord = {
+  id: string;
+  userId: string;
+  recommendationId: string;
+  title: string;
+  evidence: string;
+  status: 'pending' | 'approved' | 'returned';
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+};
 export type Audit = { id: string; at: string; actorId: string; action: string; target: string };
 export type State = {
+  development: DevelopmentRecord[];
   users: User[];
   sessions: Session[];
   avatars: Avatar[];
@@ -66,6 +78,7 @@ export function audit(s: State, actorId: string, action: string, target: string)
 export function initialState(demo: boolean): State {
   const config = configSchema.parse(seed);
   const s: State = {
+    development: [],
     users: [],
     sessions: [],
     avatars: [],
@@ -168,7 +181,7 @@ export class MemoryStore implements Store {
   protected state: State;
   private tail: Promise<unknown> = Promise.resolve();
   constructor(state = initialState(true)) {
-    this.state = state;
+    this.state = { ...state, development: state.development ?? [] };
   }
   async read() {
     await this.tail;
@@ -203,6 +216,7 @@ export class FileStore extends MemoryStore {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
       s = initialState(demo);
     }
+    s.development ??= [];
     const store = new FileStore(filename, s);
     await store.persist(s);
     return store;
@@ -226,6 +240,7 @@ CREATE TABLE IF NOT EXISTS results(session_id text PRIMARY KEY REFERENCES sessio
 CREATE TABLE IF NOT EXISTS recommendations_shown(session_id text PRIMARY KEY REFERENCES sessions(id),payload jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS avatars(id text PRIMARY KEY,session_id text NOT NULL REFERENCES sessions(id),user_id text NOT NULL REFERENCES users(id),payload jsonb NOT NULL);
 CREATE INDEX IF NOT EXISTS avatars_user_idx ON avatars(user_id);
+CREATE TABLE IF NOT EXISTS development_records(id text PRIMARY KEY,user_id text NOT NULL REFERENCES users(id),recommendation_id text NOT NULL,payload jsonb NOT NULL,UNIQUE(user_id,recommendation_id));
 CREATE TABLE IF NOT EXISTS audit_log(id text PRIMARY KEY,at timestamptz NOT NULL,actor_id text NOT NULL,action text NOT NULL,target text NOT NULL);
 `;
 export class PostgresStore implements Store {
@@ -268,6 +283,7 @@ export class PostgresStore implements Store {
         await db.query('SELECT id,at,actor_id AS "actorId",action,target FROM audit_log')
       ).rows.map((x) => ({ ...x, at: new Date(x.at).toISOString() }));
       const s: State = {
+        development: await get('development_records'),
         versions,
         users,
         sessions,
@@ -289,6 +305,11 @@ export class PostgresStore implements Store {
         await db.query(
           'INSERT INTO users VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET subject=$2,manager_id=$3,payload=$4',
           [u.id, u.sub ?? null, u.managerId ?? null, u],
+        );
+      for (const record of s.development)
+        await db.query(
+          'INSERT INTO development_records VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET payload=$4',
+          [record.id, record.userId, record.recommendationId, record],
         );
       for (const session of s.sessions) {
         const { answers, result, ...payload } = session;

@@ -179,3 +179,40 @@ test('главная BI: баннеры, свой профиль, маршрут
     })),
   ).toEqual([]);
 });
+
+test('ранг: выполнение практики, проверка руководителем и сохранение повышения', async ({
+  page,
+}) => {
+  await auth(page);
+  await page.goto('/');
+  await navigate(page, 'Мой маршрут');
+  const rank = page.getByRole('region', { name: 'Ранг развития', exact: true });
+  await expect(rank.getByRole('heading', { name: 'Практик', exact: true })).toBeVisible();
+  await rank.getByText('Практики для роста', { exact: true }).click();
+  const task = rank.locator('.rank-task').first();
+  await task.getByRole('button', { name: 'Отметить выполнение', exact: true }).click();
+  await task
+    .getByRole('textbox')
+    .fill('Две недели проверял чертежи на объекте. Отклонения разобрали с инженером.');
+  await task.getByRole('button', { name: 'На проверку', exact: true }).click();
+  await expect(task.getByText('На проверке', { exact: true })).toBeVisible();
+  await expect(rank.getByRole('heading', { name: 'Практик', exact: true })).toBeVisible();
+  await auth(page, 'manager');
+  await page.reload();
+  await navigate(page, 'Моя команда');
+  await page.getByRole('button', { name: /Александр Ким/ }).click();
+  await page.getByRole('button', { name: 'Подтвердить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Специалист', exact: true })).toBeVisible();
+  await auth(page);
+  await page.reload();
+  await navigate(page, 'Мой маршрут');
+  await expect(rank.getByRole('heading', { name: 'Специалист', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'docs/ranks-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(rank.getByRole('heading', { name: 'Специалист', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'docs/ranks-mobile.png', fullPage: true });
+  await rank.getByText('Практики для роста', { exact: true }).click();
+  const a11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(a11y.violations).toEqual([]);
+});

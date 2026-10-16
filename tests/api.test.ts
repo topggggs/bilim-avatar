@@ -222,3 +222,129 @@ describe('REST и права', () => {
     await request(production).get('/api/admin/users').set('x-user-id', 'admin').expect(401);
   });
 });
+
+describe('практики и ранги', () => {
+  it('повышает ранг только после подтверждения руководителем, без повторного зачёта', async () => {
+    const employee = await login();
+    expect((await employee.get('/api/profile/employee')).body.development.rank.current.id).toBe(
+      'start',
+    );
+    await complete(employee);
+    let p = (await employee.get('/api/profile/employee')).body;
+    expect(p.development.rank.current.id).toBe('practitioner');
+    const task = p.development.tasks[0];
+    const payload = {
+      recommendationId: task.id,
+      evidence: 'В течение двух недель применял практику, обсудил результаты на планёрке.',
+    };
+    const record = (
+      await employee.post('/api/development/submit').set('Origin', origin).send(payload).expect(201)
+    ).body;
+    await employee.post('/api/development/submit').set('Origin', origin).send(payload).expect(409);
+    await employee
+      .post(`/api/development/${record.id}/review`)
+      .set('Origin', origin)
+      .send({ decision: 'approved' })
+      .expect(403);
+    p = (await employee.get('/api/profile/employee')).body;
+    expect(p.development.rank.current.id).toBe('practitioner');
+    const manager = await login('manager');
+    await manager
+      .post(`/api/development/${record.id}/review`)
+      .set('Origin', origin)
+      .send({ decision: 'returned' })
+      .expect(200);
+    const resubmitted = (
+      await employee.post('/api/development/submit').set('Origin', origin).send(payload).expect(201)
+    ).body;
+    expect(resubmitted.id).toBe(record.id);
+    expect(resubmitted.reviewedBy).toBeUndefined();
+    await manager
+      .post(`/api/development/${record.id}/review`)
+      .set('Origin', origin)
+      .send({ decision: 'approved' })
+      .expect(200);
+    await manager
+      .post(`/api/development/${record.id}/review`)
+      .set('Origin', origin)
+      .send({ decision: 'returned' })
+      .expect(409);
+    await employee.post('/api/development/submit').set('Origin', origin).send(payload).expect(409);
+    p = (await employee.get('/api/profile/employee')).body;
+    expect(p.development.rank.current.id).toBe('specialist');
+    expect(p.development.rank.completed).toBe(1);
+    expect(
+      (await manager.get('/api/team')).body.find((x: any) => x.user.id === 'employee').development
+        .rank.current.id,
+    ).toBe('specialist');
+    expect(
+      (await store.read()).audit.filter((x) => x.action === 'development.approved'),
+    ).toHaveLength(1);
+  });
+  it('проверяет практику, результат, доступ и не разрешает самостоятельное подтверждение', async () => {
+    const employee = await login();
+    const body = {
+      recommendationId: raw.recommendations[0].id,
+      evidence: 'Результат выполнения практики.',
+    };
+    await employee.post('/api/development/submit').set('Origin', origin).send(body).expect(409);
+    await complete(employee);
+    await employee
+      .post('/api/development/submit')
+      .set('Origin', origin)
+      .send({ ...body, evidence: '  ' })
+      .expect(400);
+    await employee
+      .post('/api/development/submit')
+      .set('Origin', origin)
+      .send({ ...body, status: 'approved' })
+      .expect(400);
+    await employee
+      .post('/api/development/submit')
+      .set('Origin', origin)
+      .send({ ...body, recommendationId: 'unknown' })
+      .expect(404);
+    const record = (await employee.post('/api/development/submit').set('Origin', origin).send(body))
+      .body;
+    const manager = await login('manager');
+    await store.tx((s) => {
+      s.users.find((x) => x.id === 'employee')!.managerId = 'someone-else';
+    });
+    await manager
+      .post(`/api/development/${record.id}/review`)
+      .set('Origin', origin)
+      .send({ decision: 'approved' })
+      .expect(403);
+    await manager.get('/api/profile/employee').expect(403);
+    await manager
+      .post('/api/development/missing/review')
+      .set('Origin', origin)
+      .send({ decision: 'approved' })
+      .expect(403);
+    await complete(manager);
+    const own = (
+      await manager.post('/api/development/submit').set('Origin', origin).send(body).expect(201)
+    ).body;
+    await store.tx((s) => {
+      s.users.find((x) => x.id === 'manager')!.managerId = 'manager';
+    });
+    await manager
+      .post(`/api/development/${own.id}/review`)
+      .set('Origin', origin)
+      .send({ decision: 'approved' })
+      .expect(403);
+  });
+  it('параллельная отправка не создаёт повторные практики', async () => {
+    const a = await login();
+    await complete(a);
+    const body = {
+      recommendationId: raw.recommendations[0].id,
+      evidence: 'Практика выполнена, результат обсуждён с наставником.',
+    };
+    const responses = await Promise.all(
+      [1, 2].map(() => a.post('/api/development/submit').set('Origin', origin).send(body)),
+    );
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect((await store.read()).development).toHaveLength(1);
+  });
+});
