@@ -21,13 +21,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "storage:init": "tsx scripts/storage-init.ts",
-    "db:role": "tsx scripts/role.ts",
-    "preview:local": "tsx scripts/local-preview.ts"
+    "db:role": "tsx scripts/role.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.900.0",
     "@aws-sdk/s3-request-presigner": "^3.900.0",
     "@fontsource/manrope": "^5.3.0",
+    "@fontsource/onest": "^5.3.1",
     "bullmq": "^5.60.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.0",

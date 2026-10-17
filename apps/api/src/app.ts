@@ -1,12 +1,13 @@
-import type { ReadinessReport } from './runtime.js';
-import type { SendAuthSms } from './sms.js';
+import { AnalysisUnavailableError, type AnalyzeAnswers } from './analysis.js';
 import {
-  AuthError,
-  hashPassword,
-  verifyPassword,
-  passwordSchema,
-  type SendAuthMail,
-} from './local-auth.js';
+  validateWrittenAnswers,
+  writtenProfile,
+  InsufficientAnswersError,
+  type WrittenAnswers,
+} from '../../../packages/core/src/written.js';
+import type { Answers } from '../../../packages/core/src/index.js';
+import type { SendAuthSms } from './sms.js';
+import { AuthError, type SendAuthMail } from './local-auth.js';
 import { developmentRank } from '../../../packages/core/src/ranks.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -16,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   appearanceSchema,
+  lookSchema,
   validateAnswers,
   profile,
   choices,
@@ -23,6 +25,7 @@ import {
   buildAvatar,
   avatarName,
   configSchema,
+  AVATAR_VARIANT_LIMIT,
   scaleIds,
   type Scale,
 } from '../../../packages/core/src/index.js';
@@ -60,7 +63,8 @@ function publicAvatar(a: Avatar) {
     config: a.config,
     status: a.status,
     name: avatarName(a.config),
-    imageUrl: `/api/avatars/${a.id}/image`,
+    // The image is cached for 30 s, so a saved look must change the URL.
+    imageUrl: `/api/avatars/${a.id}/image${a.customizedAt ? `?v=${Date.parse(a.customizedAt)}` : ''}`,
     createdAt: a.createdAt,
     fixed: a.fixed,
     model: a.model,
@@ -69,9 +73,9 @@ function publicAvatar(a: Avatar) {
 export function createApp(
   store: Store,
   options: {
+    analyze?: AnalyzeAnswers;
     demo: boolean;
     localAuth?: boolean;
-    readiness?: () => Promise<ReadinessReport>;
     sendAuthMail?: SendAuthMail;
     sendAuthSms?: SendAuthSms;
     origin: string;
@@ -81,6 +85,22 @@ export function createApp(
 ) {
   const app = express();
   app.disable('x-powered-by');
+  const configuredOrigin = new URL(options.origin);
+  const allowedOrigins = new Set([configuredOrigin.origin]);
+  // `npm run dev` serves Vite on 127.0.0.1 while APP_ORIGIN usually says localhost.
+  if (options.demo || process.env.NODE_ENV === 'development') {
+    const hosts = [configuredOrigin.hostname];
+    if (configuredOrigin.hostname === 'localhost') hosts.push('127.0.0.1');
+    else if (configuredOrigin.hostname === '127.0.0.1') hosts.push('localhost');
+    const ports = new Set([configuredOrigin.port, process.env.PORT ?? '3001']);
+    for (const hostname of hosts)
+      for (const port of ports) {
+        const candidate = new URL(configuredOrigin);
+        candidate.hostname = hostname;
+        candidate.port = port;
+        allowedOrigins.add(candidate.origin);
+      }
+  }
   if (!options.demo) app.set('trust proxy', 1);
   app.use(
     helmet({
@@ -102,8 +122,11 @@ export function createApp(
     rateLimit({ windowMs: 60000, limit: 240, standardHeaders: 'draft-8', legacyHeaders: false }),
   );
   app.use('/api', (req, _res, next) => {
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers.origin !== options.origin) {
-      next(new ApiError(403, 'Запрос должен приходить из Bilim'));
+    if (
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      !allowedOrigins.has(req.headers.origin ?? '')
+    ) {
+      next(new ApiError(403, 'Запрос должен приходить из BI Group'));
       return;
     }
     next();
@@ -114,92 +137,15 @@ export function createApp(
     sendSms: options.sendAuthSms,
   });
   app.use('/api/auth', a.router);
-  app.get('/api/health', (_req, res) => res.json({ ok: true, status: 'ok' }));
-  app.get('/api/ready', async (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    if (options.readiness) {
-      const report = await options.readiness();
-      res.status(report.status === 'not_ready' ? 503 : 200).json(report);
-    } else {
-      await store.read();
-      res.json({ status: 'ready', checks: { storage: 'ready' } });
-    }
-  });
+  app.get('/api/health', (_req, res) =>
+    res.json({ ok: true, mode: options.demo ? 'demo' : 'production' }),
+  );
   app.use('/api', (_req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
   });
   app.use('/api', a.middleware);
   app.get('/api/me', (req, res) => res.json(req.user));
-  app.get('/api/account', async (req, res) => {
-    const state = await store.read();
-    const user = state.users.find((u) => u.id === req.user!.id)!;
-    const account = state.accounts.find((a) => a.userId === user.id);
-    res.json({
-      user,
-      contact: account
-        ? { email: account.email, phone: account.phone, verifiedAt: account.verifiedAt }
-        : null,
-      passwordEnabled: !!account,
-      access: user.access ?? 'active',
-    });
-  });
-  app.put('/api/account', async (req, res) => {
-    const body = z
-      .object({ name: z.string().trim().min(2).max(100), position: z.string().trim().max(100) })
-      .strict()
-      .parse(req.body);
-    const user = await store.tx((s) => {
-      const u = s.users.find((u) => u.id === req.user!.id)!;
-      Object.assign(u, body);
-      audit(s, u.id, 'account.updated', u.id);
-      return u;
-    });
-    res.json({ user });
-  });
-  app.post('/api/account/password', async (req, res) => {
-    const body = z
-      .object({ currentPassword: z.string().min(1).max(128), password: passwordSchema })
-      .strict()
-      .parse(req.body);
-    const account = (await store.read()).accounts.find((a) => a.userId === req.user!.id);
-    if (!account || !(await verifyPassword(body.currentPassword, account.passwordHash)))
-      throw new ApiError(400, 'Текущий пароль не подошёл');
-    const next = await hashPassword(body.password);
-    await store.tx((s) => {
-      const a = s.accounts.find((x) => x.id === account.id)!;
-      if (a.passwordHash !== account.passwordHash)
-        throw new ApiError(409, 'Пароль уже изменён. Войдите снова.');
-      a.passwordHash = next;
-      a.sessionVersion += 1;
-      a.failedLogins = 0;
-      a.lockedUntil = undefined;
-      audit(s, a.userId, 'account.password_changed', a.userId);
-    });
-    res
-      .clearCookie('bilim_session', {
-        httpOnly: true,
-        secure: !options.demo,
-        sameSite: 'lax',
-        path: '/api',
-      })
-      .json({ ok: true });
-  });
-  app.use('/api', (req, _res, next) => {
-    if (req.user?.access && req.user.access !== 'active') {
-      next(
-        new ApiError(
-          403,
-          req.user.access === 'pending'
-            ? 'Администратор ещё не подтвердил доступ'
-            : 'Доступ приостановлен',
-          { code: 'ACCESS_PENDING' },
-        ),
-      );
-      return;
-    }
-    next();
-  });
   app.get('/api/learning/link', (req, res) => {
     const value = z
       .string()
@@ -216,6 +162,7 @@ export function createApp(
       throw new ApiError(503, 'Учебный портал должен использовать HTTPS');
     res.json({ url: new URL(value, base).toString() });
   });
+  app.get('/api/test/analysis-status', (_req, res) => res.json({ available: !!options.analyze }));
   app.get('/api/test/config', async (_req, res) => {
     const s = await store.read();
     res.json(s.versions.find((x) => x.version === s.activeVersion));
@@ -241,14 +188,16 @@ export function createApp(
       );
       if (current) return current;
       const config = s.versions.find((x) => x.version === s.activeVersion)!;
-      if (!options.demo && config.contentStatus !== 'approved')
-        throw new ApiError(409, 'Методолог должен утвердить методику перед запуском');
       const previous = latest(s, req.user!.id);
       if (previous) {
         const nextAt = new Date(
           Date.parse(previous.completedAt!) + config.retakeDays * 86400000,
         ).toISOString();
-        if (Date.parse(nextAt) > Date.now())
+        if (
+          (s.versions.find((v) => v.version === previous.version)?.responseFormat ?? 'likert') ===
+            (config.responseFormat ?? 'likert') &&
+          Date.parse(nextAt) > Date.now()
+        )
           throw new ApiError(409, 'Повторное прохождение пока недоступно', { nextAt });
       }
       const now = new Date().toISOString();
@@ -271,15 +220,32 @@ export function createApp(
   });
   app.put('/api/test/sessions/:id/answers', async (req, res) => {
     const body = z
-      .object({ answers: z.record(z.string(), z.number()) })
+      .object({
+        answers: z.union([z.record(z.string(), z.string()), z.record(z.string(), z.number())]),
+      })
       .strict()
       .parse(req.body);
     const session = await store.tx((s) => {
       const session = ownedSession(s, String(req.params.id), req.user!);
       if (session.status !== 'in_progress') throw new ApiError(409, 'Тест уже завершён');
       const c = s.versions.find((x) => x.version === session.version)!;
-      validateAnswers(body.answers, c.questions, false);
-      session.answers = { ...session.answers, ...body.answers };
+      if (
+        session.analysis?.status === 'running' &&
+        Date.now() - Date.parse(session.analysis.startedAt) < 90000
+      )
+        throw new ApiError(409, 'Дождитесь окончания анализа');
+      if (c.responseFormat === 'written') {
+        try {
+          validateWrittenAnswers(body.answers as WrittenAnswers, c, false);
+        } catch (e) {
+          throw new ApiError(400, (e as Error).message);
+        }
+      } else validateAnswers(body.answers as Answers, c.questions, false);
+      const changed = Object.entries(body.answers).some(
+        ([id, value]) => session.answers[id] !== value,
+      );
+      session.answers = { ...session.answers, ...body.answers } as typeof session.answers;
+      if (changed) delete session.analysis;
       return session;
     });
     res.json({ savedAt: new Date().toISOString(), answers: session.answers });
@@ -303,19 +269,101 @@ export function createApp(
   }
   app.post('/api/test/sessions/:id/submit', async (req, res) => {
     const body = z
-      .object({ primary: z.enum(scaleIds).optional(), secondary: z.enum(scaleIds).optional() })
+      .object({
+        primary: z.enum(scaleIds).optional(),
+        secondary: z.enum(scaleIds).optional(),
+        retryAnalysis: z.boolean().optional(),
+      })
       .strict()
       .parse(req.body ?? {});
+    const pending = await store.tx((s) => {
+      const session = ownedSession(s, String(req.params.id), req.user!);
+      const c = s.versions.find((v) => v.version === session.version)!;
+      if (
+        c.responseFormat !== 'written' ||
+        session.status === 'completed' ||
+        session.analysis?.status === 'ready'
+      )
+        return null;
+      try {
+        validateWrittenAnswers(session.answers as WrittenAnswers, c);
+      } catch (e) {
+        throw new ApiError(400, (e as Error).message);
+      }
+      if (!options.analyze)
+        throw new ApiError(503, new AnalysisUnavailableError().message, {
+          code: 'AI_NOT_CONFIGURED',
+        });
+      if (
+        session.analysis?.status === 'running' &&
+        Date.now() - Date.parse(session.analysis.startedAt) < 90000
+      )
+        return { running: true as const };
+      if (session.analysis?.status === 'failed' && !body.retryAnalysis)
+        throw new ApiError(422, session.analysis.error!, {
+          code: 'ANALYSIS_FAILED',
+          questionIds: session.analysis.questionIds,
+        });
+      const runId = randomUUID();
+      session.analysis = { status: 'running', runId, startedAt: new Date().toISOString() };
+      audit(s, req.user!.id, 'test.analysis_started', session.id);
+      return {
+        running: false as const,
+        sessionId: session.id,
+        runId,
+        answers: session.answers as WrittenAnswers,
+        config: c,
+      };
+    });
+    if (pending) {
+      if (!pending.running) {
+        const job = pending;
+        // The provider call runs outside the store transaction; no lock is held over the network.
+        void (async () => {
+          try {
+            const report = await options.analyze!(job.answers, job.config);
+            writtenProfile(report, job.config);
+            await store.tx((s) => {
+              const session = s.sessions.find((x) => x.id === job.sessionId)!;
+              if (session.analysis?.runId !== job.runId) return;
+              session.analysis = { ...session.analysis, status: 'ready', report };
+              audit(s, session.userId, 'test.analysis_completed', session.id);
+            });
+          } catch (error) {
+            await store.tx((s) => {
+              const session = s.sessions.find((x) => x.id === job.sessionId)!;
+              if (session.analysis?.runId !== job.runId) return;
+              session.analysis = {
+                ...session.analysis,
+                status: 'failed',
+                error:
+                  error instanceof InsufficientAnswersError
+                    ? error.message
+                    : 'Не удалось завершить ИИ-анализ. Ответы сохранены. Попробуйте ещё раз.',
+                questionIds:
+                  error instanceof InsufficientAnswersError ? error.questionIds : undefined,
+              };
+              audit(s, session.userId, 'test.analysis_failed', session.id);
+            });
+          }
+        })().catch(() => console.error('Analysis state could not be persisted'));
+      }
+      res.status(202).json({ status: 'analyzing' });
+      return;
+    }
     const out = await store.tx((s) => {
       const session = ownedSession(s, String(req.params.id), req.user!);
       if (session.status === 'completed')
         return { session, avatar: s.avatars.find((x) => x.sessionId === session.id)! };
       const c = s.versions.find((v) => v.version === session.version)!;
-      const result = profile(
-        session.answers,
-        c,
-        (Date.now() - Date.parse(session.startedAt)) / 1000,
-      );
+      const result =
+        c.responseFormat === 'written'
+          ? writtenProfile(session.analysis!.report!, c)
+          : profile(
+              session.answers as Answers,
+              c,
+              (Date.now() - Date.parse(session.startedAt)) / 1000,
+            );
       const opts = choices(result.percentages, body.primary);
       let config;
       try {
@@ -325,6 +373,8 @@ export function createApp(
           c,
           body.primary,
           body.secondary,
+          c.responseFormat !== 'written' &&
+            c.questions.every((question) => session.answers[question.id] === 1),
         );
       } catch {
         throw new ApiError(409, 'Выберите качества для героя', {
@@ -357,7 +407,7 @@ export function createApp(
     if (out.avatar.status === 'queued') await enqueue(out.avatar.id);
     res.json({ result: out.session.result, sessionId: out.session.id });
   });
-  function portrait(s: State, u: User) {
+  function portrait(s: State, u: User, includeAnswerStatistics = false) {
     const session = latest(s, u.id);
     const av = session
       ? s.avatars
@@ -387,6 +437,43 @@ export function createApp(
           : [],
       },
       result: session?.result ?? null,
+      answerStatistics:
+        includeAnswerStatistics && session && c.responseFormat !== 'written'
+          ? (() => {
+              const items = c.questions.map((question) => ({
+                id: question.id,
+                text: question.text,
+                scales: question.scales,
+                answer: (session.answers as Answers)[question.id]!,
+              }));
+              const distribution = Array.from({ length: 7 }, (_, index) => ({
+                value: index + 1,
+                count: items.filter((item) => item.answer === index + 1).length,
+              }));
+              return {
+                average: Number(
+                  (items.reduce((sum, item) => sum + item.answer, 0) / items.length).toFixed(1),
+                ),
+                count: items.length,
+                distribution,
+                items,
+              };
+            })()
+          : undefined,
+      writtenReview:
+        includeAnswerStatistics && session && c.responseFormat === 'written'
+          ? {
+              summary: session.analysis?.report?.summary,
+              scales: session.analysis?.report?.scales,
+              model: session.analysis?.report?.model,
+              rubricVersion: session.analysis?.report?.rubricVersion,
+              items: c.questions.map((q) => ({
+                id: q.id,
+                text: q.text,
+                answer: session.answers[q.id],
+              })),
+            }
+          : undefined,
       completedAt: session?.completedAt,
       sessionId: session?.id,
       avatar: selected ? publicAvatar(selected) : null,
@@ -397,10 +484,13 @@ export function createApp(
           at: x.completedAt,
           percentages: x.result!.percentages,
           testVersion: x.version,
+          responseFormat:
+            s.versions.find((v) => v.version === x.version)?.responseFormat ?? 'likert',
         })),
-      nextAllowedAt: session
-        ? new Date(Date.parse(session.completedAt!) + active.retakeDays * 86400000).toISOString()
-        : null,
+      nextAllowedAt:
+        session && (c.responseFormat ?? 'likert') === (active.responseFormat ?? 'likert')
+          ? new Date(Date.parse(session.completedAt!) + active.retakeDays * 86400000).toISOString()
+          : null,
       scales: c.scales,
       retakeDays: active.retakeDays,
     };
@@ -410,7 +500,7 @@ export function createApp(
       const target = s.users.find((x) => x.id === req.params.userId);
       if (!target || !canView(req.user!, target)) throw new ApiError(403, 'Профиль недоступен');
       if (req.user!.id !== target.id) audit(s, req.user!.id, 'profile.viewed', target.id);
-      return portrait(s, target);
+      return portrait(s, target, req.user!.id === target.id);
     });
     res.json(out);
   });
@@ -485,7 +575,7 @@ export function createApp(
     const avatars = s.avatars.filter((x) => x.sessionId === session?.id);
     res.json({
       avatars: avatars.map(publicAvatar),
-      regenerationsLeft: Math.max(0, 4 - avatars.length),
+      regenerationsLeft: Math.max(0, AVATAR_VARIANT_LIMIT - avatars.length),
     });
   });
   app.get('/api/avatars/:id/image', async (req, res) => {
@@ -499,7 +589,11 @@ export function createApp(
       res.redirect(await options.image(av));
       return;
     }
-    res.type('image/svg+xml').send(av.fallbackSvg);
+    const variants = s.avatars
+      .filter((x) => x.sessionId === av.sessionId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const variantIndex = variants.findIndex((x) => x.id === av.id);
+    res.type('image/svg+xml').send(buildAvatar(av.config, Math.max(variantIndex, 0)).fallbackSvg);
   });
   app.post('/api/avatar/:userId/regenerate', async (req, res) => {
     if (req.params.userId !== req.user!.id) throw new ApiError(403, 'Нельзя изменять чужой аватар');
@@ -507,13 +601,20 @@ export function createApp(
       const session = latest(s, req.user!.id);
       if (!session) throw new ApiError(404, 'Сначала пройдите тест');
       const variants = s.avatars.filter((x) => x.sessionId === session.id);
-      if (variants.some((x) => x.fixed) || variants.length >= 4)
+      if (variants.some((x) => x.fixed) || variants.length >= AVATAR_VARIANT_LIMIT)
         throw new ApiError(409, 'Лимит вариантов исчерпан или аватар зафиксирован');
       if (variants.some((x) => ['queued', 'generating'].includes(x.status)))
         throw new ApiError(409, 'Дождитесь текущей генерации');
       const prev = variants[0];
+      // A new variant shows the next preset, not a look someone saved on another variant.
+      const { look: _look, ...config } = prev.config;
+      const { prompt, fallbackSvg } = buildAvatar(config, variants.length);
       const next: Avatar = {
         ...prev,
+        config,
+        customizedAt: undefined,
+        prompt,
+        fallbackSvg,
         model: process.env.IMAGE_MODEL ?? 'gpt-image-1',
         id: randomUUID(),
         createdAt: new Date().toISOString(),
@@ -547,6 +648,34 @@ export function createApp(
       audit(s, req.user!.id, 'avatar.fixed', av.id);
     });
     res.json({ ok: true });
+  });
+  app.put('/api/avatars/:id/look', async (req, res) => {
+    const body = z
+      .object({ look: lookSchema, style: appearanceSchema.shape.style })
+      .strict()
+      .parse(req.body);
+    const av = await store.tx((s) => {
+      const av = s.avatars.find((x) => x.id === req.params.id && x.userId === req.user!.id);
+      if (!av) throw new ApiError(404, 'Аватар не найден');
+      if (latest(s, req.user!.id)?.id !== av.sessionId)
+        throw new ApiError(409, 'Это аватар предыдущего прохождения');
+      if (!['ready', 'fallback'].includes(av.status))
+        throw new ApiError(409, 'Дождитесь текущей генерации');
+      const variants = s.avatars
+        .filter((x) => x.sessionId === av.sessionId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      av.config = { ...av.config, style: body.style, look: body.look };
+      const built = buildAvatar(av.config, variants.indexOf(av));
+      av.prompt = built.prompt;
+      av.fallbackSvg = built.fallbackSvg;
+      // The saved look is drawn as an illustration; an earlier AI image would no longer match it.
+      av.imageKey = undefined;
+      av.status = 'fallback';
+      av.customizedAt = new Date().toISOString();
+      audit(s, req.user!.id, 'avatar.customized', av.id);
+      return av;
+    });
+    res.json(publicAvatar(av));
   });
   app.get('/api/methodology/config', async (req, res) => {
     requireRole(req.user!, ['methodologist', 'admin']);
@@ -584,32 +713,19 @@ export function createApp(
         position: z.string().max(100),
         role: z.enum(['employee', 'manager', 'methodologist', 'admin']),
         managerId: z.string().optional(),
-        access: z.enum(['pending', 'active', 'suspended']).optional(),
       })
       .strict()
       .parse(req.body);
     await store.tx((s) => {
-      if (
-        body.managerId &&
-        (body.managerId === body.id ||
-          !s.users.some((u) => u.id === body.managerId && u.role === 'manager'))
-      )
+      if (body.managerId && !s.users.some((u) => u.id === body.managerId && u.role === 'manager'))
         throw new ApiError(400, 'Укажите существующего руководителя');
       if (body.sub && s.users.some((u) => u.sub === body.sub && u.id !== body.id))
         throw new ApiError(409, 'OIDC subject уже занят');
-      if (
-        body.id === req.user!.id &&
-        (body.role !== 'admin' || (body.access && body.access !== 'active'))
-      )
+      if (body.id === req.user!.id && body.role !== 'admin')
         throw new ApiError(409, 'Нельзя отозвать собственную роль администратора');
       const index = s.users.findIndex((u) => u.id === body.id);
-      if (index >= 0)
-        s.users[index] = {
-          ...s.users[index],
-          ...body,
-          access: body.access ?? s.users[index].access ?? 'active',
-        };
-      else s.users.push({ ...body, access: body.access ?? 'active' });
+      if (index >= 0) s.users[index] = body;
+      else s.users.push(body);
       audit(s, req.user!.id, 'user.updated', body.id);
     });
     res.json({ ok: true });

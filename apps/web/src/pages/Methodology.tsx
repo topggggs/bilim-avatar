@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { configSchema, scaleIds, type TestConfig } from '../../../../packages/core/src/index';
 import { api } from '../api';
 import { t } from '../localization';
-import { Disclaimer, levelLabels } from '../shared';
+import { Disclaimer, levelLabel } from '../shared';
 export default function Methodology({
   config,
   canEdit,
@@ -152,7 +152,7 @@ export default function Methodology({
               <h2>{value.scales[s].label}</h2>
               {(['low', 'medium', 'high'] as const).map((l) => (
                 <label className="form-label" key={l}>
-                  {levelLabels[l]}
+                  {levelLabel(l)}
                   {t('text213')}
                   <textarea
                     value={value.scales[s].interpretations[l]}

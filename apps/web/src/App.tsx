@@ -1,20 +1,21 @@
-import Account from './pages/Account';
-import Avatars from './pages/Avatars';
-import Auth, { readAuthLink, clearAuthFlow, type AuthMode } from './pages/Auth';
+import Auth, { readAuthLink, type AuthMode } from './pages/Auth';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { scaleIds, type TestConfig, type Appearance } from '../../../packages/core/src/index';
+import { scaleIds, type TestConfig } from '../../../packages/core/src/index';
 import type { Session, User } from '../../api/src/store';
 import { api, HttpError } from './api';
-import { t } from './localization';
+import { avatarName, rankName, scaleShort } from './content';
+import { t, useLanguage } from './localization';
+import { LanguageMenu, ThemeToggle, UserMenu } from './Menus';
 import Admin from './pages/Admin';
 import Methodology from './pages/Methodology';
 import Profile from './pages/Profile';
 import Home from './pages/Home';
 import LearningRoute from './pages/LearningRoute';
 import TestFlow from './pages/TestFlow';
-import { Disclaimer, readDraft, type Draft, type Portrait } from './shared';
+import { Brand, Disclaimer, readDraft, type Draft, type Portrait } from './shared';
 export default function App() {
+  useLanguage();
   const [authLink, setAuthLink] = useState(readAuthLink);
   const [authMode, setAuthMode] = useState<AuthMode>({
     demo: false,
@@ -34,7 +35,6 @@ export default function App() {
     [draft, setDraft] = useState<Draft | null>(null),
     [team, setTeam] = useState<Portrait[]>([]),
     [selected, setSelected] = useState<Portrait | null>(null);
-  const [appearance, setAppearance] = useState<Appearance | undefined>();
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [teamQuery, setTeamQuery] = useState('');
@@ -48,13 +48,6 @@ export default function App() {
       setAuthMode(mode);
       const u = await api<User>('/me');
       setUser(u);
-      if (u.access && u.access !== 'active') {
-        setPage('account');
-        setPortrait(null);
-        setConfig(null);
-        setDraft(null);
-        return;
-      }
       const c = await api<TestConfig>('/test/config');
       setConfig(c);
       if (['employee', 'manager'].includes(u.role)) {
@@ -130,22 +123,10 @@ export default function App() {
       window.removeEventListener('offline', online);
     };
   }, []);
-  function signedOut() {
-    clearAuthFlow();
-    setAuthLink(null);
-    sessionStorage.removeItem('bilim-bootstrap');
-    if (user) localStorage.removeItem(`bilim-draft-${user.id}`);
-    setUser(null);
-    setPortrait(null);
-    setDraft(null);
-    setTeam([]);
-    setError('');
-  }
   async function switchRole(id: string) {
     setBusy(true);
     try {
       await api('/auth/demo', 'POST', { userId: id });
-      clearAuthFlow();
       sessionStorage.removeItem('bilim-bootstrap');
       setSelected(null);
       setPortrait(null);
@@ -176,7 +157,9 @@ export default function App() {
   if (loading)
     return (
       <div className="boot">
-        <div className="brand-badge">BI</div>
+        <span className="brand-mark" aria-hidden="true">
+          BI
+        </span>
         <div className="spinner" />
         <p>{t('text002')}</p>
       </div>
@@ -194,7 +177,6 @@ export default function App() {
         }}
       />
     );
-  const activeAccess = !user.access || user.access === 'active';
   const nav = [
     { id: 'home', text: t('home.nav'), show: ['employee', 'manager'].includes(user.role) },
     {
@@ -210,30 +192,10 @@ export default function App() {
       show: ['methodologist', 'admin'].includes(user.role),
     },
     { id: 'admin', text: t('text009'), show: user.role === 'admin' },
-    { id: 'avatars', text: 'Персонажи', show: ['employee', 'manager'].includes(user.role) },
-    { id: 'account', text: 'Настройки', show: true },
   ];
   return (
     <div className="app-shell">
       <header className="site-header">
-        <div className="utility-bar">
-          <span>BI Academy</span>
-          <div>
-            <span>{user.name}</span>
-            <button
-              onClick={async () => {
-                try {
-                  await api('/auth/logout', 'POST');
-                  signedOut();
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              {t('text014')}
-            </button>
-          </div>
-        </div>
         <div className="site-main-header">
           <button
             className="site-menu-toggle"
@@ -244,28 +206,39 @@ export default function App() {
             {t('header.sections')}
             <span aria-hidden="true">{menuOpen ? '−' : '+'}</span>
           </button>
-          <a className="brand" href="/" aria-label="Bilim">
-            <span className="brand-badge">BI</span>
-            <strong>BILIM</strong>
+          <a className="brand" href="/" aria-label="BI Group">
+            <Brand />
           </a>
-          <button
-            className="site-account"
-            onClick={() =>
-              void navigate(
-                user.role === 'methodologist'
-                  ? 'method'
-                  : user.role === 'admin'
-                    ? 'admin'
-                    : 'profile',
-              )
-            }
-          >
-            {t('header.account')}
-          </button>
+          <div className="header-actions">
+            <ThemeToggle />
+            <LanguageMenu />
+            <UserMenu
+              name={user.name}
+              detail={
+                {
+                  employee: t('text020'),
+                  manager: t('text021'),
+                  methodologist: t('text022'),
+                  admin: t('text023'),
+                }[user.role]
+              }
+              onProfile={
+                ['employee', 'manager'].includes(user.role)
+                  ? () => void navigate('profile')
+                  : undefined
+              }
+              onLogout={async () => {
+                await api('/auth/logout', 'POST');
+                sessionStorage.removeItem('bilim-bootstrap');
+                localStorage.removeItem(`bilim-draft-${user.id}`);
+                setUser(null);
+              }}
+            />
+          </div>
         </div>
         <nav id="site-navigation" className={`site-nav ${menuOpen ? 'is-open' : ''}`}>
           {nav
-            .filter((n) => n.show && (activeAccess || n.id === 'account'))
+            .filter((n) => n.show)
             .map((n) => (
               <button
                 key={n.id}
@@ -311,28 +284,6 @@ export default function App() {
               </button>
             </div>
           )}
-          {page === 'account' && (
-            <Account
-              user={user}
-              onUpdate={(u) => {
-                setUser(u);
-                if (portrait) setPortrait({ ...portrait, user: u });
-                sessionStorage.removeItem('bilim-bootstrap');
-              }}
-              onSignOut={signedOut}
-            />
-          )}
-          {page === 'avatars' && (
-            <Avatars
-              canStart={
-                !portrait?.nextAllowedAt || Date.parse(portrait.nextAllowedAt) <= Date.now()
-              }
-              onSelect={(a) => {
-                setAppearance(a);
-                setPage('create');
-              }}
-            />
-          )}
           {page === 'create' && config && (
             <TestFlow
               user={user}
@@ -342,7 +293,6 @@ export default function App() {
               onDone={() => void completed()}
               onDraft={setDraft}
               offline={offline}
-              initialAppearance={appearance}
             />
           )}
           {page === 'home' && portrait && (
@@ -375,10 +325,7 @@ export default function App() {
                 <div>
                   <h1>{t('text027')}</h1>
                 </div>
-                <span className="count-badge">
-                  {team.length}
-                  {t('text029')}
-                </span>
+                <span className="count-badge">{t('team.count', { count: team.length })}</span>
               </div>
               {selected ? (
                 <>
@@ -436,16 +383,16 @@ export default function App() {
                           onClick={() => setSelected(p)}
                         >
                           <div className="team-avatar">
-                            {p.avatar && <img src={p.avatar.imageUrl} alt={p.avatar.name} />}
+                            {p.avatar && <img src={p.avatar.imageUrl} alt={avatarName(p.avatar)} />}
                           </div>
                           <h3>{p.user.name}</h3>
                           <p>{p.user.position}</p>
-                          <span className="team-rank">{p.development.rank.current.name}</span>
+                          <span className="team-rank">{rankName(p.development.rank.current)}</span>
                           {p.result ? (
                             <div className="mini-scores">
                               {scaleIds.map((s) => (
                                 <div key={s}>
-                                  <span>{p.scales[s].short}</span>
+                                  <span>{scaleShort(p.scales, s)}</span>
                                   <b>{p.result!.percentages[s]}%</b>
                                 </div>
                               ))}
@@ -484,10 +431,6 @@ export default function App() {
           )}
           {page === 'admin' && <Admin />}
         </main>
-        <footer className="site-footer">
-          <span>BI Academy</span>
-          <span>Bilim · 2026</span>
-        </footer>
       </div>
     </div>
   );

@@ -18,7 +18,6 @@ try {
     )
       throw Error('Use an existing manager ID other than the user');
     user.role = role as Role;
-    user.access = 'active';
     if (managerId) user.managerId = managerId;
     audit(s, 'bootstrap', 'user.role_updated', user.id);
     console.log('Role updated:', user.id, role);

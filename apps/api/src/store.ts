@@ -3,6 +3,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import seed from '../../../config/test.ru.json';
+import legacy from '../../../config/test.legacy.ru.json';
+import type { WrittenAnswers, AnalysisReport } from '../../../packages/core/src/written.js';
 import {
   configSchema,
   profile,
@@ -22,19 +24,26 @@ export type User = {
   role: Role;
   managerId?: string;
   position: string;
-  access?: 'pending' | 'active' | 'suspended';
 };
 export type Session = {
   id: string;
   userId: string;
   version: string;
   appearance: Appearance;
-  answers: Answers;
+  answers: Answers | WrittenAnswers;
+  analysis?: {
+    status: 'running' | 'ready' | 'failed';
+    runId: string;
+    startedAt: string;
+    report?: AnalysisReport;
+    error?: string;
+    questionIds?: string[];
+  };
   startedAt: string;
   completedAt?: string;
   consentAt: string;
   consentVersion: string;
-  status: 'in_progress' | 'completed';
+  status: 'in_progress' | 'completed' | 'superseded';
   result?: Result;
 };
 export type Avatar = {
@@ -51,6 +60,8 @@ export type Avatar = {
   attempts: number;
   fixed: boolean;
   error?: string;
+  /** Last time the owner saved a custom look; also busts the image cache. */
+  customizedAt?: string;
 };
 export type DevelopmentRecord = {
   id: string;
@@ -113,8 +124,8 @@ export type State = {
 export function audit(s: State, actorId: string, action: string, target: string) {
   s.audit.push({ id: randomUUID(), at: new Date().toISOString(), actorId, action, target });
 }
-export function initialState(demo: boolean): State {
-  const config = configSchema.parse(seed);
+export function initialState(demo: boolean, configSeed: unknown = seed): State {
+  const config = configSchema.parse(configSeed);
   const s: State = {
     phoneChallenges: [],
     accounts: [],
@@ -123,11 +134,14 @@ export function initialState(demo: boolean): State {
     users: [],
     sessions: [],
     avatars: [],
-    versions: [config],
+    versions: [configSchema.parse(legacy), config].filter(
+      (v, i, vs) => vs.findIndex((x) => x.version === v.version) === i,
+    ),
     activeVersion: config.version,
     audit: [],
   };
   if (!demo) return s;
+  const historic = configSchema.parse(legacy);
   s.users = [
     {
       id: 'employee',
@@ -168,9 +182,9 @@ export function initialState(demo: boolean): State {
   ];
   for (const [i, userId] of ['employee-2', 'employee-3'].entries()) {
     const answers = Object.fromEntries(
-      config.questions.map((q, j) => [q.id, q.reverse ? 2 + i : Math.max(2, 7 - (j % 3) - i)]),
+      historic.questions.map((q, j) => [q.id, q.reverse ? 2 + i : Math.max(2, 7 - (j % 3) - i)]),
     );
-    const result = profile(answers, config, 340),
+    const result = profile(answers, historic, 340),
       appearance: Appearance = {
         universe: 'animals',
         gender: 'neutral',
@@ -179,7 +193,7 @@ export function initialState(demo: boolean): State {
     const session: Session = {
       id: randomUUID(),
       userId,
-      version: config.version,
+      version: historic.version,
       answers,
       appearance,
       startedAt: new Date(Date.now() - 86400000 - 340000).toISOString(),
@@ -195,7 +209,7 @@ export function initialState(demo: boolean): State {
         result.percentages[b as keyof typeof result.percentages] -
         result.percentages[a as keyof typeof result.percentages],
     ) as (keyof typeof result.percentages)[];
-    const conf = avatarConfig(appearance, result.percentages, config, ranked[0], ranked[1]);
+    const conf = avatarConfig(appearance, result.percentages, historic, ranked[0], ranked[1]);
     const { prompt, fallbackSvg } = buildAvatar(conf);
     s.avatars.push({
       id: randomUUID(),
@@ -267,6 +281,7 @@ export class FileStore extends MemoryStore {
     s.phoneChallenges ??= [];
     s.accounts ??= [];
     s.authTokens ??= [];
+    installWrittenVersion(s);
     const store = new FileStore(filename, s);
     await store.persist(s);
     return store;
@@ -311,6 +326,7 @@ export class PostgresStore implements Store {
         s.versions.push(c);
         s.activeVersion = c.version;
       }
+      installWrittenVersion(s);
     });
   }
   async read() {
@@ -425,6 +441,19 @@ export class PostgresStore implements Store {
   }
   async close() {
     await this.pool.end();
+  }
+}
+function installWrittenVersion(s: State) {
+  if (!s.versions.some((v) => v.version === seed.version)) {
+    s.versions.push(configSchema.parse(seed));
+    s.activeVersion = seed.version;
+    for (const session of s.sessions) {
+      if (
+        session.status === 'in_progress' &&
+        s.versions.find((v) => v.version === session.version)?.responseFormat !== 'written'
+      )
+        session.status = 'superseded';
+    }
   }
 }
 export async function createStore() {

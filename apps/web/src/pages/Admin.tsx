@@ -3,10 +3,7 @@ import React, { useEffect, useState } from 'react';
 import type { User } from '../../../api/src/store';
 import { api } from '../api';
 import { t } from '../localization';
-import features from '../../../../config/features.ru.json';
-const copy = features.admin;
 export default function Admin() {
-  const [runtime, setRuntime] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]),
     [logs, setLogs] = useState<any[]>([]),
     [error, setError] = useState(''),
@@ -18,16 +15,10 @@ export default function Admin() {
       position: '',
       role: 'employee',
       managerId: '',
-      access: 'active',
     });
   async function load() {
     try {
-      const [u, a, r] = await Promise.all([
-        api('/admin/users'),
-        api('/admin/audit'),
-        api('/ready'),
-      ]);
-      setRuntime(r);
+      const [u, a] = await Promise.all([api('/admin/users'), api('/admin/audit')]);
       setUsers(u);
       setLogs(a);
     } catch (e) {
@@ -65,41 +56,6 @@ export default function Admin() {
         </div>
       )}
       {notice && <div className="success">{notice}</div>}
-      {runtime && (
-        <section className="panel runtime-panel">
-          <h2>{copy.connections}</h2>
-          <div className="runtime-checks">
-            {Object.entries(runtime.checks ?? {}).map(([key, value]) => (
-              <div key={key}>
-                <span>{copy.checkNames[key as keyof typeof copy.checkNames] ?? key}</span>
-                <strong>
-                  {value === 'ok'
-                    ? copy.checkStates.connected
-                    : value === 'not_required'
-                      ? copy.checkStates.unused
-                      : copy.checkStates.unavailable}
-                </strong>
-              </div>
-            ))}
-            {Object.entries(runtime.services ?? {})
-              .filter(([key]) => key !== 'authentication')
-              .map(([key, value]) => (
-                <div key={key}>
-                  <span>{copy.serviceNames[key as keyof typeof copy.serviceNames] ?? key}</span>
-                  <strong>
-                    {value === 'configured'
-                      ? copy.serviceStates.configured
-                      : value === 'preview'
-                        ? copy.serviceStates.preview
-                        : value === 'fallback'
-                          ? copy.serviceStates.fallback
-                          : copy.serviceStates.unconfigured}
-                  </strong>
-                </div>
-              ))}
-          </div>
-        </section>
-      )}
       <div className="admin-grid">
         <section className="panel editor-row">
           <h2>{t('text228')}</h2>
@@ -115,19 +71,13 @@ export default function Admin() {
                     position: u.position,
                     role: u.role,
                     managerId: u.managerId ?? '',
-                    access: u.access ?? 'active',
                   })
                 }
               >
                 <span>
                   <strong>{u.name}</strong>
                   <small>
-                    {u.role} ·{' '}
-                    {u.access === 'pending'
-                      ? copy.needsAccess
-                      : u.access === 'suspended'
-                        ? copy.suspended
-                        : u.id}
+                    {u.role} · {u.id}
                   </small>
                 </span>
                 <ChevronRight size={17} />
@@ -139,7 +89,7 @@ export default function Admin() {
           <h2>{t('text229')}</h2>
           {[
             { id: 'id', label: t('text230') },
-            { id: 'sub', label: copy.oidcSubject },
+            { id: 'sub', label: 'OIDC subject' },
             { id: 'name', label: t('text231') },
             { id: 'position', label: t('text232') },
           ].map((f) => (
@@ -152,18 +102,6 @@ export default function Admin() {
               />
             </label>
           ))}
-          <label className="form-label">
-            {copy.access}
-            <select
-              aria-label={copy.accessLabel}
-              value={form.access}
-              onChange={(e) => setForm({ ...form, access: e.target.value })}
-            >
-              <option value="pending">{copy.accessStates.pending}</option>
-              <option value="active">{copy.accessStates.active}</option>
-              <option value="suspended">{copy.accessStates.suspended}</option>
-            </select>
-          </label>
           <label className="form-label">
             {t('text233')}
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>

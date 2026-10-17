@@ -1,0 +1,123 @@
+{
+  "scales": {
+    "critical": {
+      "label": "Critical thinking",
+      "short": "Thinking",
+      "interpretations": {
+        "low": "Start by checking facts and looking for the root cause of deviations.",
+        "medium": "You analyse work situations. Strengthen the habit of testing assumptions.",
+        "high": "You spot inconsistencies and find their causes. Apply this skill when reviewing complex cases."
+      }
+    },
+    "confidence": {
+      "label": "Self-confidence",
+      "short": "Confidence",
+      "interpretations": {
+        "low": "Practise stating your position calmly and asking for help.",
+        "medium": "You're ready to take responsibility. Practise discussing decisions with solid arguments.",
+        "high": "You state your position confidently and take responsibility. Help colleagues speak up about risks."
+      }
+    },
+    "discipline": {
+      "label": "Discipline",
+      "short": "Discipline",
+      "interpretations": {
+        "low": "Build steady routines for starting and finishing your shift.",
+        "medium": "You follow the core rules. Make recording results a daily habit.",
+        "high": "You follow processes consistently. Share a checklist that works with your team."
+      }
+    },
+    "engagement": {
+      "label": "Engagement",
+      "short": "Engagement",
+      "interpretations": {
+        "low": "Start by understanding how your work contributes to the overall result on site.",
+        "medium": "You take part in team life. Try suggesting an improvement to a related process.",
+        "high": "You see the bigger picture and support colleagues. Try yourself as a mentor."
+      }
+    }
+  },
+  "questions": {
+    "1": "The shift starts soon. How will you check readiness, and what will you do if a permit or PPE is missing?",
+    "2": "The drawing differs from actual site conditions. What will you check before deciding whether work can start?",
+    "3": "An experienced colleague breaks a technical rule. What will you say, and what if they disagree?",
+    "4": "A neighbouring crew is behind schedule. How will you help while accounting for your own tasks?",
+    "5": "You are asked to skip a checklist item to save time. How will you respond and explain your decision?",
+    "6": "An experienced colleague gives an instruction that seems questionable. How will you verify it and agree on next steps?",
+    "7": "How does your work affect the next construction stages? Give an example and explain how you account for it.",
+    "8": "An urgent decision is needed and your manager is unavailable. How will you define your authority and act?",
+    "9": "The shift has ended, but quantities and issues are not recorded. What will you do now and next time?",
+    "10": "You notice a problem outside your area of responsibility. What will you do to get it resolved?",
+    "11": "Defects or delays recur on your site. How will you find the root cause and check that a fix worked?",
+    "12": "You doubt a conclusion before handing over work. What evidence will you use, and when will you request a review?",
+    "13": "You are pushed to change the technical sequence. How will you assess the situation and respond?",
+    "14": "A newcomer asks you to share a work technique. How will you explain it and check they can use it safely?",
+    "15": "Reinforcement does not match the design. The crew says: “We always do it this way.” Describe and explain your actions in order."
+  },
+  "recommendations": {
+    "rec-critical-1": {
+      "title": "The “three whys” rule",
+      "text": "For every deviation, ask three follow-up questions about its cause."
+    },
+    "rec-critical-2": {
+      "title": "Checking drawings against the site",
+      "text": "Review three discrepancies with an engineer or a mentor."
+    },
+    "rec-critical-medium": {
+      "title": "The “three whys” rule",
+      "text": "For every deviation, ask three follow-up questions about its cause."
+    },
+    "rec-critical-high": {
+      "title": "The “three whys” rule",
+      "text": "For every deviation, ask three follow-up questions about its cause."
+    },
+    "rec-confidence-1": {
+      "title": "Fact — risk — proposal",
+      "text": "Rehearse a comment with your mentor and use the formula at a briefing."
+    },
+    "rec-confidence-2": {
+      "title": "Lead one briefing yourself",
+      "text": "Prepare and run a briefing, then get feedback from your mentor."
+    },
+    "rec-confidence-medium": {
+      "title": "Fact — risk — proposal",
+      "text": "Rehearse a comment with your mentor and use the formula at a briefing."
+    },
+    "rec-confidence-high": {
+      "title": "Fact — risk — proposal",
+      "text": "Rehearse a comment with your mentor and use the formula at a briefing."
+    },
+    "rec-discipline-1": {
+      "title": "Shift start checklist",
+      "text": "Before work begins, check the plan, permits and PPE."
+    },
+    "rec-discipline-2": {
+      "title": "Shift log",
+      "text": "Every day, record completed volumes and issues before the shift ends."
+    },
+    "rec-discipline-medium": {
+      "title": "Shift start checklist",
+      "text": "Before work begins, check the plan, permits and PPE."
+    },
+    "rec-discipline-high": {
+      "title": "Shift start checklist",
+      "text": "Before work begins, check the plan, permits and PPE."
+    },
+    "rec-engagement-1": {
+      "title": "One improvement a week",
+      "text": "Suggest one concrete improvement to the work process to your team."
+    },
+    "rec-engagement-2": {
+      "title": "A day with a related crew",
+      "text": "Discuss a placement with your manager to see the next stage of work."
+    },
+    "rec-engagement-medium": {
+      "title": "One improvement a week",
+      "text": "Suggest one concrete improvement to the work process to your team."
+    },
+    "rec-engagement-high": {
+      "title": "One improvement a week",
+      "text": "Suggest one concrete improvement to the work process to your team."
+    }
+  }
+}

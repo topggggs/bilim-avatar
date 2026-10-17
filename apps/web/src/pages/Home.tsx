@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { scaleIds } from '../../../../packages/core/src/index';
+import { avatarName, rankName, recTitle, scaleLabel } from '../content';
 import { t } from '../localization';
 import { date, type Portrait } from '../shared';
 
@@ -47,7 +48,6 @@ export default function Home({
       <div className="home-hero-grid">
         <section className="home-hero" aria-label={t('home.heroLabel')}>
           <div className="home-hero-content">
-            <span className="home-kicker">BI ACADEMY</span>
             <h1>{current.title}</h1>
             <button className="button hero-cta" onClick={current.action}>
               {current.label}
@@ -85,10 +85,14 @@ export default function Home({
         <div className="home-side-cards">
           <section className="home-action-card blue">
             <span className="card-category">
-              {t('home.profileLabel')} · {p.development.rank.current.name}
+              {t('home.profileLabel')} · {rankName(p.development.rank.current)}
             </span>
             <h2>
-              {p.result ? (p.avatar?.name ?? t('home.profileReady')) : t('home.profileCreate')}
+              {p.result
+                ? p.avatar
+                  ? avatarName(p.avatar)
+                  : t('home.profileReady')
+                : t('home.profileCreate')}
             </h2>
             <p>{p.result ? `${t('home.updated')} ${date(p.completedAt!)}` : t('home.testMeta')}</p>
             <button className="button" onClick={start}>
@@ -97,7 +101,7 @@ export default function Home({
           </section>
           <section className="home-action-card">
             <span className="card-category">{t('home.nextStep')}</span>
-            <h2>{p.result ? p.result.nextStep.title : t('home.routeTitle')}</h2>
+            <h2>{p.result ? recTitle(p.result.nextStep) : t('home.routeTitle')}</h2>
             <button className="button primary" onClick={() => onNavigate('route')}>
               {t('home.routeOpen')}
             </button>
@@ -128,7 +132,7 @@ export default function Home({
         <div className="home-quality-grid">
           {scaleIds.map((s) => (
             <article className="home-quality-card" key={s}>
-              <span>{p.scales[s].label}</span>
+              <span>{scaleLabel(p.scales, s)}</span>
               <strong>{p.result ? `${p.result.percentages[s]}%` : '—'}</strong>
               <div className="home-quality-track">
                 <span style={{ width: `${p.result?.percentages[s] ?? 0}%` }} />

@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { lookOptions, type Look } from './avatar.js';
 export const scaleIds = ['critical', 'confidence', 'discipline', 'engagement'] as const;
 export type Scale = (typeof scaleIds)[number];
+export const AVATAR_VARIANT_LIMIT = 8;
 export type Level = 'low' | 'medium' | 'high';
 export type Scores = Record<Scale, number>;
 export type Answers = Record<string, number>;
@@ -12,11 +14,23 @@ export const appearanceSchema = z
   })
   .strict();
 export type Appearance = z.infer<typeof appearanceSchema>;
-export type Archetype = 'strategist' | 'leader' | 'master' | 'mentor';
+export type Archetype = 'strategist' | 'leader' | 'master' | 'mentor' | 'jobseeker';
+export const lookSchema = z
+  .object({
+    headwear: z.enum(lookOptions.headwear),
+    eyewear: z.enum(lookOptions.eyewear),
+    extra: z.enum(lookOptions.extra),
+    expression: z.enum(lookOptions.expression),
+    background: z.enum(lookOptions.background),
+    skin: z.enum(lookOptions.skin),
+  })
+  .strict();
 export type AvatarConfig = Appearance & {
   archetype: Archetype;
   accessory: Scale;
   boosted: boolean;
+  /** Set once the person customizes the avatar; otherwise the variant preset is used. */
+  look?: Look;
 };
 export const questionSchema = z
   .object({
@@ -43,6 +57,7 @@ export const recommendationSchema = z
   .strict();
 export const configSchema = z
   .object({
+    responseFormat: z.enum(['likert', 'written']).optional(),
     version: z.string().regex(/^\d+\.\d+\.\d+$/),
     contentStatus: z.enum(['draft', 'approved']),
     retakeDays: z.number().int().min(1).max(365),
@@ -80,10 +95,13 @@ export const configSchema = z
       ctx.addIssue({ code: 'custom', message: 'Шкалы вопроса не должны повторяться' });
     for (const s of scaleIds) {
       const qs = c.questions.filter((q) => q.scales.includes(s));
-      if (qs.length !== 4 || qs.filter((q) => q.reverse).length !== 1)
+      if (
+        qs.length !== 4 ||
+        qs.filter((q) => q.reverse).length !== (c.responseFormat === 'written' ? 0 : 1)
+      )
         ctx.addIssue({
           code: 'custom',
-          message: `Шкала ${s}: нужно четыре вопроса, один обратный`,
+          message: `Шкала ${s}: неверное число вопросов или обратных утверждений`,
         });
       if (c.recommendations.filter((r) => r.scale === s && r.level === 'low').length < 2)
         ctx.addIssue({ code: 'custom', message: `Недостаточно рекомендаций ${s}` });
@@ -144,8 +162,14 @@ export function choices(scores: Scores, primary?: Scale) {
   };
 }
 export function profile(answers: Answers, c: TestConfig, elapsedSeconds: number) {
-  const percentages = score(answers, c.questions),
-    sorted = rank(percentages),
+  const flags: string[] = [];
+  if (Object.values(answers).filter((x) => x === 4).length >= c.quality.neutralCount)
+    flags.push('neutral_answers');
+  if (elapsedSeconds < c.quality.minimumSeconds) flags.push('too_fast');
+  return profileFromScores(score(answers, c.questions), c, flags);
+}
+export function profileFromScores(percentages: Scores, c: TestConfig, qualityFlags: string[] = []) {
+  const sorted = rank(percentages),
     weakest = sorted[sorted.length - 1];
   const levels = Object.fromEntries(
     scaleIds.map((s) => [s, level(percentages[s], c.thresholds)]),
@@ -157,10 +181,6 @@ export function profile(answers: Answers, c: TestConfig, elapsedSeconds: number)
         c.recommendations.filter((r) => r.scale === s && r.level === 'low').slice(0, 2),
       )
     : [c.recommendations.find((r) => r.scale === weakest && r.level === levels[weakest])!];
-  const qualityFlags: string[] = [];
-  if (Object.values(answers).filter((x) => x === 4).length >= c.quality.neutralCount)
-    qualityFlags.push('neutral_answers');
-  if (elapsedSeconds < c.quality.minimumSeconds) qualityFlags.push('too_fast');
   return {
     percentages,
     levels,
@@ -183,8 +203,16 @@ export function avatarConfig(
   c: TestConfig,
   primary?: Scale,
   secondary?: Scale,
+  allMinimumAnswers = false,
 ): AvatarConfig {
   appearanceSchema.parse(appearance);
+  if (allMinimumAnswers)
+    return {
+      ...appearance,
+      archetype: 'jobseeker',
+      accessory: 'critical',
+      boosted: false,
+    };
   const options = choices(scores, primary);
   if (
     (primary && !options.primaryOptions.includes(primary)) ||
@@ -202,4 +230,4 @@ export function avatarConfig(
     boosted: scores[p] >= c.thresholds.high,
   };
 }
-export { buildAvatar, avatarName, avatarCatalog } from './avatar.js';
+export { buildAvatar, avatarName, lookOptions, resolveLook, type Look } from './avatar.js';

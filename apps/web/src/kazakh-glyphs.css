@@ -1,0 +1,82 @@
+/* Manrope has no Ә Ғ Қ Ң Ұ. Onest, the closest match, supplies only those glyphs so Kazakh text
+   never falls back to a system serif; everything else keeps rendering in Manrope. */
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/onest/files/onest-cyrillic-ext-400-normal.woff2') format('woff2');
+  unicode-range: U+0492-0493, U+049A-049B, U+04A2-04A3, U+04D8-04D9;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/onest/files/onest-cyrillic-400-normal.woff2') format('woff2');
+  unicode-range: U+04B0-04B1;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/onest/files/onest-cyrillic-ext-500-normal.woff2') format('woff2');
+  unicode-range: U+0492-0493, U+049A-049B, U+04A2-04A3, U+04D8-04D9;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/onest/files/onest-cyrillic-500-normal.woff2') format('woff2');
+  unicode-range: U+04B0-04B1;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/onest/files/onest-cyrillic-ext-600-normal.woff2') format('woff2');
+  unicode-range: U+0492-0493, U+049A-049B, U+04A2-04A3, U+04D8-04D9;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/onest/files/onest-cyrillic-600-normal.woff2') format('woff2');
+  unicode-range: U+04B0-04B1;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/onest/files/onest-cyrillic-ext-700-normal.woff2') format('woff2');
+  unicode-range: U+0492-0493, U+049A-049B, U+04A2-04A3, U+04D8-04D9;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/onest/files/onest-cyrillic-700-normal.woff2') format('woff2');
+  unicode-range: U+04B0-04B1;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800;
+  src: url('@fontsource/onest/files/onest-cyrillic-ext-800-normal.woff2') format('woff2');
+  unicode-range: U+0492-0493, U+049A-049B, U+04A2-04A3, U+04D8-04D9;
+}
+@font-face {
+  font-family: 'Manrope Kazakh';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800;
+  src: url('@fontsource/onest/files/onest-cyrillic-800-normal.woff2') format('woff2');
+  unicode-range: U+04B0-04B1;
+}

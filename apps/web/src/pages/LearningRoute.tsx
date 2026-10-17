@@ -1,6 +1,7 @@
 import RankCard from '../RankCard';
 import { useState } from 'react';
 import { api } from '../api';
+import { recText, recTitle, scaleLabel } from '../content';
 import { t } from '../localization';
 import { Disclaimer, type Portrait } from '../shared';
 
@@ -78,16 +79,16 @@ export default function LearningRoute({
         <>
           <div className="section-heading">
             <h2>{t('text091')}</h2>
-            <span>{p.scales[p.result.weakest].label}</span>
+            <span>{scaleLabel(p.scales, p.result.weakest)}</span>
           </div>
           <div className="route-recommendations">
             {p.result.recommendations.slice(recPage * 4, recPage * 4 + 4).map((rec) => (
               <article key={rec.id} className="route-rec panel">
-                <span>{p.scales[rec.scale].label}</span>
-                <h3>{rec.title}</h3>
+                <span>{scaleLabel(p.scales, rec.scale)}</span>
+                <h3>{recTitle(rec)}</h3>
                 <details className="explanation">
                   <summary>{t('details')}</summary>
-                  <p>{rec.text}</p>
+                  <p>{recText(rec)}</p>
                 </details>
                 <div className="route-rec-bottom">
                   <span>

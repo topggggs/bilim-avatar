@@ -2,12 +2,13 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../apps/api/src/app';
 import { MemoryStore, initialState, type State } from '../apps/api/src/store';
-import raw from '../config/test.ru.json';
+import { AVATAR_VARIANT_LIMIT } from '../packages/core/src/index';
+import raw from '../config/test.legacy.ru.json';
 const origin = 'http://localhost:5173';
 let store: MemoryStore;
 let app: ReturnType<typeof createApp>;
 beforeEach(() => {
-  store = new MemoryStore(initialState(true));
+  store = new MemoryStore(initialState(true, raw));
   app = createApp(store, { demo: true, origin });
 });
 async function login(role = 'employee') {
@@ -95,6 +96,12 @@ describe('REST и права', () => {
     });
     expect(p.result.testVersion).toBe('0.1.0');
     expect(p.avatar.status).toBe('fallback');
+    expect(p.answerStatistics.average).toBe(4);
+    expect(p.answerStatistics.count).toBe(15);
+    expect(p.answerStatistics.items).toHaveLength(15);
+    expect(
+      p.answerStatistics.distribution.find((x: { value: number }) => x.value === 4).count,
+    ).toBe(15);
     expect(JSON.stringify(p)).not.toContain('\"answers\":');
     expect(p.history).toHaveLength(1);
     await a
@@ -103,6 +110,53 @@ describe('REST и права', () => {
       .send({ answers: { '1': 1 } })
       .expect(409);
   });
+  it('заменённый ответ перезаписывается и учитывается при расчёте результата', async () => {
+    const a = await login();
+    const s = await start(a);
+    const original = Object.fromEntries(raw.questions.map((question) => [question.id, 7]));
+    await a
+      .put(`/api/test/sessions/${s.id}/answers`)
+      .set('Origin', origin)
+      .send({ answers: original })
+      .expect(200);
+    await a
+      .put(`/api/test/sessions/${s.id}/answers`)
+      .set('Origin', origin)
+      .send({ answers: { '1': 1 } })
+      .expect(200);
+
+    const saved = (await a.get('/api/test/sessions/current').expect(200)).body;
+    expect(saved.answers['1']).toBe(1);
+    expect(saved.answers['2']).toBe(7);
+    await a
+      .post(`/api/test/sessions/${s.id}/submit`)
+      .set('Origin', origin)
+      .send({ primary: 'critical', secondary: 'confidence' })
+      .expect(200);
+
+    const profile = (await a.get('/api/profile/employee').expect(200)).body;
+    expect(profile.answerStatistics.items[0].answer).toBe(1);
+    expect(profile.answerStatistics.average).toBeLessThan(7);
+    expect(profile.result.percentages.discipline).toBe(50);
+  });
+  it('все ответы 1 сразу создают аватар соискателя без выбора равных качеств', async () => {
+    const a = await login();
+    const s = await start(a);
+    await a
+      .put(`/api/test/sessions/${s.id}/answers`)
+      .set('Origin', origin)
+      .send({ answers: Object.fromEntries(raw.questions.map((question) => [question.id, 1])) })
+      .expect(200);
+
+    await a.post(`/api/test/sessions/${s.id}/submit`).set('Origin', origin).send({}).expect(200);
+
+    const profile = (await a.get('/api/profile/employee').expect(200)).body;
+    expect(profile.answerStatistics.average).toBe(1);
+    expect(profile.answerStatistics.distribution[0].count).toBe(15);
+    expect(profile.avatar.name).toBe('Панда-безработный');
+    expect(profile.avatar.config.archetype).toBe('jobseeker');
+    expect(profile.avatar.config.accessory).toBe('critical');
+  });
   it('менеджер видит свою команду, но не ответы и не чужой профиль', async () => {
     const a = await login();
     const s = await complete(a);
@@ -110,6 +164,7 @@ describe('REST и права', () => {
     const team = await m.get('/api/team').expect(200);
     expect(team.body).toHaveLength(3);
     expect(JSON.stringify(team.body)).not.toContain('\"answers\":');
+    expect(JSON.stringify(team.body)).not.toContain('\"answerStatistics\":');
     await m.get('/api/profile/outsider').expect(403);
     await m.get('/api/avatar/outsider').expect(403);
     await m.get('/api/profile/employee').expect(200);
@@ -143,25 +198,70 @@ describe('REST и права', () => {
     const p = (await a.get('/api/profile/employee')).body;
     expect(p.history).toHaveLength(2);
   });
-  it('лимит вариантов атомарен, выбор фиксируется и изображение защищено', async () => {
+  it('владелец настраивает образ: схема, обновление картинки, новый вариант без чужого образа', async () => {
     const a = await login();
     await complete(a);
-    const responses = await Promise.all(
-      Array.from({ length: 5 }, () =>
-        a.post('/api/avatar/employee/regenerate').set('Origin', origin).send({}),
-      ),
-    );
-    expect(responses.filter((r) => r.status === 202)).toHaveLength(3);
+    const [first] = (await a.get('/api/avatar/employee')).body.avatars;
+    const look = {
+      headwear: 'cap',
+      eyewear: 'sunglasses',
+      extra: 'medal',
+      expression: 'wink',
+      background: 'night',
+      skin: 'tan',
+    };
+    const put = (agent: typeof a, body: object) =>
+      agent.put(`/api/avatars/${first.id}/look`).set('Origin', origin).send(body);
+    await put(a, { look: { ...look, headwear: 'crown' }, style: 'calm' }).expect(400);
+    await put(a, { look, style: 'neon' }).expect(400);
+    await put(a, { look, style: 'calm', fixed: true }).expect(400);
+    const saved = (await put(a, { look, style: 'calm' }).expect(200)).body;
+    expect(saved.config).toMatchObject({ look, style: 'calm' });
+    expect(saved.imageUrl).toMatch(/\/image\?v=\d+$/);
+    const image = (await a.get(saved.imageUrl).expect(200)).body.toString('utf8');
+    expect(image).toContain('data-part="headwear-cap"');
+    expect(image).toContain('data-part="extra-medal"');
+    const stored = (await store.read()).avatars.find((x) => x.id === first.id)!;
+    expect(stored.fallbackSvg).toBe(image);
+    expect(stored.prompt).toContain('gold medal');
+    const next = (
+      await a.post('/api/avatar/employee/regenerate').set('Origin', origin).send({}).expect(202)
+    ).body;
+    expect(next.config.look).toBeUndefined();
+    expect(next.imageUrl).not.toContain('?v=');
+    const nextImage = (await a.get(next.imageUrl).expect(200)).body.toString('utf8');
+    expect(nextImage).toContain('data-part="headwear-helmet"');
+    expect(nextImage).toContain('data-part="eyewear-sunglasses"');
+    await put(await login('manager'), { look, style: 'calm' }).expect(404);
+  });
+  it('показывает восемь разных вариантов, выбор фиксируется и изображение защищено', async () => {
+    const a = await login();
+    await complete(a);
+    for (let index = 1; index < AVATAR_VARIANT_LIMIT; index++)
+      await a.post('/api/avatar/employee/regenerate').set('Origin', origin).send({}).expect(202);
     const data = (await a.get('/api/avatar/employee')).body;
-    expect(data.avatars).toHaveLength(4);
+    expect(data.avatars).toHaveLength(AVATAR_VARIANT_LIMIT);
     expect(data.regenerationsLeft).toBe(0);
+    const stored = await store.read();
+    const variants = stored.avatars.filter((x) => x.userId === 'employee');
+    expect(new Set(variants.map((x) => x.prompt)).size).toBe(AVATAR_VARIANT_LIMIT);
+    expect(new Set(variants.map((x) => x.fallbackSvg)).size).toBe(AVATAR_VARIANT_LIMIT);
+    await a.post('/api/avatar/employee/regenerate').set('Origin', origin).send({}).expect(409);
     await a
       .post(`/api/avatars/${data.avatars[1].id}/fix`)
       .set('Origin', origin)
       .send({})
       .expect(200);
     await a.post('/api/avatar/employee/regenerate').set('Origin', origin).send({}).expect(409);
-    await a.get(data.avatars[1].imageUrl).expect('Content-Type', /svg/).expect(200);
+    const images = await Promise.all(
+      data.avatars.map((avatar: { imageUrl: string }) => a.get(avatar.imageUrl).expect(200)),
+    );
+    expect(images.every((image) => image.headers['content-type'].includes('image/svg+xml'))).toBe(
+      true,
+    );
+    expect(new Set(images.map((image) => image.body.toString('utf8'))).size).toBe(
+      AVATAR_VARIANT_LIMIT,
+    );
     const m = await login('manager');
     const outsider = await store.tx((s) => {
       const av = { ...s.avatars[0], id: 'other-avatar', userId: 'outsider' };

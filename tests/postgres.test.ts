@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { reportFor, writtenAnswer } from './fixtures/written';
+import { writtenProfile } from '../packages/core/src/written';
 import { it, expect } from 'vitest';
 import { PostgresStore, initialState } from '../apps/api/src/store';
 it.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -102,6 +104,35 @@ it.skipIf(!process.env.TEST_DATABASE_URL)(
       { env: { ...process.env, STORAGE_MODE: 'postgres', DATABASE_URL: url, AUTH_MODE: 'local' } },
     );
     expect((await reopened.read()).users.find((u) => u.id === 'employee')!.role).toBe('admin');
+    await reopened.tx((s) => {
+      const config = s.versions.find((v) => v.version === s.activeVersion)!;
+      const report = reportFor(config);
+      s.sessions.push({
+        id: 'written-session',
+        userId: 'employee',
+        version: config.version,
+        appearance: { universe: 'animals', gender: 'neutral', style: 'tech' },
+        answers: Object.fromEntries(config.questions.map((q) => [q.id, writtenAnswer])),
+        status: 'completed',
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        consentAt: new Date().toISOString(),
+        consentVersion: config.consentVersion,
+        analysis: {
+          status: 'ready',
+          runId: 'analysis-run',
+          startedAt: new Date().toISOString(),
+          report,
+        },
+        result: writtenProfile(report, config),
+      });
+    });
     await reopened.close();
+    const final = new PostgresStore(url);
+    const saved = (await final.read()).sessions.find((s) => s.id === 'written-session')!;
+    expect(saved.answers['1']).toBe(writtenAnswer);
+    expect(saved.analysis?.report?.rubricVersion).toBe('written-v1');
+    expect(saved.result?.percentages.critical).toBe(50);
+    await final.close();
   },
 );

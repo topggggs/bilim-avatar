@@ -8,7 +8,7 @@ import {
   scrypt,
   timingSafeEqual,
 } from 'node:crypto';
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import nodemailer from 'nodemailer';
@@ -64,18 +64,65 @@ export async function verifyPassword(password: string, encoded: string) {
     return false;
   return timingSafeEqual(await derive(password, salt), Buffer.from(key, 'hex'));
 }
-export type AuthMail = { to: string; kind: 'signup' | 'reset'; link: string };
+export const mailLanguages = ['ru', 'en', 'kk'] as const;
+export type MailLanguage = (typeof mailLanguages)[number];
+export type AuthMail = { to: string; kind: 'signup' | 'reset'; link: string; lang?: MailLanguage };
+const mailTexts: Record<
+  MailLanguage,
+  {
+    subject: Record<AuthMail['kind'], string>;
+    intro: Record<AuthMail['kind'], string>;
+    valid: (minutes: number) => string;
+  }
+> = {
+  ru: {
+    subject: {
+      signup: 'BI Group — подтверждение почты',
+      reset: 'BI Group — восстановление доступа',
+    },
+    intro: {
+      signup: 'Завершите регистрацию в BI Group',
+      reset: 'Если вы регистрировались в BI Group, установите новый пароль',
+    },
+    valid: (m) =>
+      `Ссылка действует ${m} минут. Если вы не отправляли запрос, проигнорируйте это письмо.`,
+  },
+  en: {
+    subject: { signup: 'BI Group — confirm your email', reset: 'BI Group — reset your password' },
+    intro: {
+      signup: 'Finish signing up for BI Group',
+      reset: 'If you have a BI Group account, set a new password',
+    },
+    valid: (m) =>
+      `The link is valid for ${m} minutes. If you didn't request it, just ignore this email.`,
+  },
+  kk: {
+    subject: {
+      signup: 'BI Group — поштаны растау',
+      reset: 'BI Group — қолжетімділікті қалпына келтіру',
+    },
+    intro: {
+      signup: 'BI Group жүйесінде тіркелуді аяқтаңыз',
+      reset: 'Егер BI Group жүйесінде тіркелген болсаңыз, жаңа құпиясөз орнатыңыз',
+    },
+    valid: (m) => `Сілтеме ${m} минут жарамды. Егер сұрау жібермеген болсаңыз, бұл хатты елемеңіз.`,
+  },
+};
 export type SendAuthMail = (mail: AuthMail) => Promise<void>;
-export function smtpMailer(): SendAuthMail {
+const isGmail = () => process.env.SMTP_HOST?.trim().toLowerCase() === 'smtp.gmail.com';
+function smtpTransport() {
   const port = Number(process.env.SMTP_PORT ?? 587);
-  const transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+  const user = process.env.SMTP_USER?.trim();
+  // Google shows app passwords in groups of four; the spaces are not part of the secret.
+  const pass = isGmail()
+    ? process.env.SMTP_PASSWORD?.replace(/\s+/g, '')
+    : process.env.SMTP_PASSWORD;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST?.trim(),
     port,
     secure: port === 465,
     requireTLS: true,
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
-      : undefined,
+    auth: user ? { user, pass } : undefined,
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
@@ -84,15 +131,47 @@ export function smtpMailer(): SendAuthMail {
     logger: false,
     debug: false,
   });
-  return async ({ to, kind, link }) => {
+}
+type SmtpError = { code?: string; responseCode?: number; response?: string; message?: string };
+// Known configuration causes only; arbitrary error text is never shown to the browser.
+export function smtpProblem(error: unknown) {
+  const e = error as SmtpError | undefined;
+  if (e?.code === 'EAUTH' || e?.responseCode === 535)
+    return isGmail()
+      ? 'Gmail отклонил SMTP_USER/SMTP_PASSWORD: нужен пароль приложения Google из 16 букв (myaccount.google.com/apppasswords), обычный пароль аккаунта не подходит.'
+      : 'SMTP-сервер отклонил SMTP_USER/SMTP_PASSWORD.';
+  if (['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ECONNREFUSED'].includes(e?.code ?? ''))
+    return `Нет соединения с ${process.env.SMTP_HOST}:${process.env.SMTP_PORT ?? 587}: проверьте SMTP_HOST, SMTP_PORT и доступ в интернет.`;
+}
+// Server responses (e.g. "535 5.7.8 ...") never echo the password, so they are safe to log.
+export function smtpLogDetails(error: unknown) {
+  const e = error as SmtpError | undefined;
+  return (
+    smtpProblem(error) ??
+    [e?.code, e?.responseCode, String(e?.response ?? e?.message ?? 'unknown').slice(0, 200)]
+      .filter(Boolean)
+      .join(' ')
+  );
+}
+export async function verifySmtp() {
+  await smtpTransport().verify();
+}
+export function smtpMailer(): SendAuthMail {
+  const user = process.env.SMTP_USER?.trim();
+  const transport = smtpTransport();
+  return async ({ to, kind, link, lang = 'ru' }) => {
+    const copy = mailTexts[lang];
     await transport.sendMail({
-      from: process.env.SMTP_FROM,
+      from: process.env.SMTP_FROM?.trim() || user,
       to,
-      subject: kind === 'signup' ? 'Bilim — подтверждение почты' : 'Bilim — восстановление доступа',
-      text: `${kind === 'signup' ? 'Завершите регистрацию в Bilim' : 'Если вы регистрировались в Bilim, установите новый пароль'}:\n\n${link}\n\nСсылка действует ${kind === 'signup' ? '30' : '15'} минут. Если вы не отправляли запрос, проигнорируйте это письмо.`,
+      subject: copy.subject[kind],
+      text: `${copy.intro[kind]}:\n\n${link}\n\n${copy.valid(kind === 'signup' ? 30 : 15)}`,
     });
   };
 }
+// The web client sends its selected interface language; anything else falls back to Russian.
+const mailLanguage = (req: Request): MailLanguage =>
+  (req.acceptsLanguages(...mailLanguages) || 'ru') as MailLanguage;
 function liveToken(s: State, raw: string, kind: 'signup' | 'reset') {
   const record = s.authTokens.find(
     (t) =>
@@ -130,8 +209,22 @@ export function localAuth(
   );
   // A real derivation for unknown emails keeps login comparison work comparable.
   const dummy = () => (dummyPassword ??= hashPassword(randomBytes(32).toString('hex')));
+  const gmailNeedsCredentials =
+    process.env.SMTP_HOST?.toLowerCase() === 'smtp.gmail.com' &&
+    (!process.env.SMTP_USER?.trim() || !process.env.SMTP_PASSWORD?.trim());
+  const missingMailSetting = !process.env.SMTP_HOST?.trim()
+    ? 'SMTP_HOST'
+    : process.env.SMTP_HOST.toLowerCase() === 'smtp.gmail.com' && !process.env.SMTP_USER?.trim()
+      ? 'SMTP_USER'
+      : process.env.SMTP_HOST.toLowerCase() === 'smtp.gmail.com' &&
+          !process.env.SMTP_PASSWORD?.trim()
+        ? 'SMTP_PASSWORD (пароль приложения Google)'
+        : 'настройки SMTP';
   const sendMail =
-    options.sendMail ?? (!options.preview && process.env.SMTP_HOST ? smtpMailer() : undefined);
+    options.sendMail ??
+    (!options.preview && process.env.SMTP_HOST && !gmailNeedsCredentials
+      ? smtpMailer()
+      : undefined);
   const sendSms =
     options.sendSms ?? (!options.preview && smsConfigured() ? twilioSender() : undefined);
   const otpHash = (id: string, code: string) =>
@@ -141,7 +234,7 @@ export function localAuth(
     b: { email?: string; phone?: string },
   ) => !!((a.email && a.email === b.email) || (a.phone && a.phone === b.phone));
   const emailBody = z.object({ email: emailSchema }).strict();
-  async function requestLink(email: string, kind: 'signup' | 'reset') {
+  async function requestLink(email: string, kind: 'signup' | 'reset', lang: MailLanguage) {
     if (
       kind === 'signup' &&
       options.domains?.length &&
@@ -151,7 +244,7 @@ export function localAuth(
         email: 'Используйте рабочую почту',
       });
     if (!options.preview && !sendMail)
-      throw new AuthError(503, 'Отправка писем пока недоступна. Попробуйте позже.');
+      throw new AuthError(503, `Почта не настроена: заполните ${missingMailSetting} в .env.`);
     const raw = randomBytes(32).toString('base64url');
     const record = await store.tx((s) => {
       // Keep expired records briefly for the per-address throttle, then remove them.
@@ -178,12 +271,19 @@ export function localAuth(
     const link = `${options.origin}/#${kind === 'signup' ? 'verify' : 'reset'}=${raw}`;
     if (sendMail) {
       try {
-        await sendMail({ to: email, kind, link });
-      } catch {
+        await sendMail({ to: email, kind, link, lang });
+      } catch (error) {
         await store.tx((s) => {
           s.authTokens = s.authTokens.filter((t) => t.id !== record.id);
         });
-        throw new AuthError(503, 'Не удалось отправить письмо. Попробуйте ещё раз.');
+        console.error('SMTP delivery failed:', smtpLogDetails(error));
+        const problem = process.env.NODE_ENV === 'production' ? undefined : smtpProblem(error);
+        throw new AuthError(
+          503,
+          problem
+            ? `Не удалось отправить письмо. ${problem}`
+            : 'Не удалось отправить письмо. Попробуйте ещё раз.',
+        );
       }
     }
     return { ok: true, retryAfter: 60, ...(options.preview ? { previewLink: link } : {}) };
@@ -283,7 +383,7 @@ export function localAuth(
   });
   router.post('/register/request', async (req, res) => {
     const { email } = emailBody.parse(req.body);
-    res.json(await requestLink(email, 'signup'));
+    res.json(await requestLink(email, 'signup', mailLanguage(req)));
   });
   router.post('/register/complete', async (req, res) => {
     const body = z
@@ -310,7 +410,6 @@ export function localAuth(
         name: body.name,
         position: body.position || 'Сотрудник',
         role: 'employee',
-        access: options.preview ? 'active' : 'pending',
       });
       const next = {
         id: randomUUID(),
@@ -385,7 +484,7 @@ export function localAuth(
   });
   router.post('/password/request', async (req, res) => {
     const { email } = emailBody.parse(req.body);
-    res.json(await requestLink(email, 'reset'));
+    res.json(await requestLink(email, 'reset', mailLanguage(req)));
   });
   router.post('/password/reset', async (req, res) => {
     const body = z

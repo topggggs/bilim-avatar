@@ -1,36 +1,40 @@
 import 'dotenv/config';
+import { createAnalyzer } from './analysis.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createStore, PostgresStore } from './store.js';
+import { createStore } from './store.js';
 import { createApp } from './app.js';
 import { avatarQueue, imageUrl, generate } from './generation.js';
-import {
-  createReadiness,
-  maintenanceLoop,
-  recoverExpiredAvatars,
-  runtimeSettings,
-} from './runtime.js';
-const settings = runtimeSettings();
-const demo = settings.auth === 'demo';
-const local = settings.auth === 'local';
+import { smtpLogDetails, verifySmtp } from './local-auth.js';
+const demo = (process.env.AUTH_MODE ?? 'demo') === 'demo';
+const local = process.env.AUTH_MODE === 'local';
+if (process.env.NODE_ENV === 'production' && (demo || process.env.STORAGE_MODE !== 'postgres'))
+  throw Error('Production requires local or OIDC authentication and PostgreSQL');
+if (!demo && process.env.NODE_ENV === 'production') {
+  const required = [
+    'SESSION_SECRET',
+    'APP_ORIGIN',
+    ...(local
+      ? ['SMTP_HOST', 'SMTP_FROM', 'REGISTRATION_DOMAINS']
+      : ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_REDIRECT_URI']),
+  ];
+  for (const key of required) if (!process.env[key]) throw Error(`Missing ${key}`);
+  if (process.env.SESSION_SECRET!.length < 32 || !process.env.APP_ORIGIN!.startsWith('https://'))
+    throw Error('Production requires HTTPS and a strong session secret');
+}
+// Fail loudly at startup instead of on the first registration attempt.
+if (local && process.env.SMTP_HOST?.trim())
+  void verifySmtp().then(
+    () => console.log(`SMTP ${process.env.SMTP_HOST}: login OK, registration emails will be sent`),
+    (e) => console.error(`SMTP ${process.env.SMTP_HOST}: ${smtpLogDetails(e)}`),
+  );
 const store = await createStore();
 const queue = process.env.REDIS_URL ? avatarQueue() : undefined;
-queue?.on('error', () => console.error('avatar_queue_unavailable'));
-const readiness = createReadiness({
-  settings,
-  storage: () => (store instanceof PostgresStore ? store.pool.query('SELECT 1') : store.read()),
-  queue: queue ? () => queue.getJobCounts('waiting', 'active') : undefined,
-  worker: queue
-    ? async () => {
-        if ((await queue.getWorkersCount()) < 1) throw Error('worker_unavailable');
-      }
-    : undefined,
-});
 const app = createApp(store, {
+  analyze: createAnalyzer(),
   demo,
   origin: process.env.APP_ORIGIN ?? 'http://localhost:5173',
-  readiness,
   enqueue: queue
     ? async (id) => {
         await queue.add('generate', { id }, { jobId: id });
@@ -44,30 +48,27 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 app.use(express.static(root));
 app.get('/{*splat}', (_req, res) => res.sendFile(path.join(root, 'index.html')));
 // Recovery sweeper: pending jobs older than 30 seconds always settle on a usable fallback.
-const recovery = maintenanceLoop(() => recoverExpiredAvatars(store), {
-  onError: () => console.error('avatar_recovery_unavailable'),
-});
+const recovery = setInterval(() => {
+  void store.tx((s) => {
+    for (const a of s.avatars)
+      if (
+        ['queued', 'generating'].includes(a.status) &&
+        Date.now() - Date.parse(a.createdAt) > 27000
+      ) {
+        a.status = 'fallback';
+        a.error = 'deadline_exceeded';
+      }
+  });
+}, 1000);
 const server = app.listen(Number(process.env.PORT ?? 3001), '0.0.0.0', () =>
   console.log(
-    `Bilim API http://localhost:${process.env.PORT ?? 3001} (${demo ? 'synthetic demo' : local ? 'email authentication' : 'OIDC'})`,
+    `BI Group API http://localhost:${process.env.PORT ?? 3001} (${demo ? 'synthetic demo' : local ? 'email authentication' : 'OIDC'})`,
   ),
 );
-let stopping = false;
 for (const signal of ['SIGTERM', 'SIGINT'])
   process.on(signal, () => {
-    if (stopping) return;
-    stopping = true;
-    const deadline = setTimeout(() => process.exit(1), 10000);
-    deadline.unref();
+    clearInterval(recovery);
     server.close(() => {
-      void recovery
-        .stop()
-        .then(() => queue?.close())
-        .then(() => store.close())
-        .then(() => process.exit(0))
-        .catch(() => {
-          console.error('shutdown_failed');
-          process.exit(1);
-        });
+      void Promise.all([queue?.close(), store.close()]).then(() => process.exit(0));
     });
   });

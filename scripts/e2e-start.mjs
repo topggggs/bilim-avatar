@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 await rm(new URL('../.data/e2e', import.meta.url), { recursive: true, force: true });
-const child = spawn(process.execPath, ['--import', 'tsx', 'apps/api/src/index.ts'], {
+const child = spawn(process.execPath, ['--import', 'tsx', 'tests/fixtures/e2e-server.ts'], {
   stdio: 'inherit',
   env: {
     ...process.env,

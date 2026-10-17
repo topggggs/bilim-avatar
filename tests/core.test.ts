@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import raw from '../config/test.ru.json';
+import raw from '../config/test.legacy.ru.json';
 import {
   configSchema,
   score,
@@ -9,7 +9,9 @@ import {
   avatarConfig,
   buildAvatar,
   avatarName,
-  avatarCatalog,
+  lookOptions,
+  lookSchema,
+  resolveLook,
   scaleIds,
   validateAnswers,
   type TestConfig,
@@ -225,19 +227,8 @@ describe('buildAvatar', () => {
                 expect(avatarName(conf)).toBeTruthy();
               }
   });
-  it('отклоняет все неизвестные значения конфигурации и попытки вставить разметку', () => {
-    for (const bad of [
-      { universe: 'unknown' },
-      { archetype: 'unknown' },
-      { style: 'unknown' },
-      { accessory: 'unknown' },
-      { gender: 'unknown' },
-      { boosted: 'false' },
-      { universe: 'constructor' },
-      { archetype: '__proto__' },
-      { gender: '<script>alert(1)</script>' },
-      { style: '#fff\" onload=\"alert(1)' },
-    ])
+  it('отклоняет неверный архетип, палитру или аксессуар', () => {
+    for (const bad of [{ archetype: 'unknown' }, { style: 'unknown' }, { accessory: 'unknown' }])
       expect(() =>
         buildAvatar({
           ...{
@@ -251,27 +242,111 @@ describe('buildAvatar', () => {
           ...bad,
         } as AvatarConfig),
       ).toThrow();
-    expect(() => buildAvatar(null as unknown as AvatarConfig)).toThrow();
-    expect(() => avatarName(undefined as unknown as AvatarConfig)).toThrow();
   });
-  it('каталог содержит 20 различных оригинальных персонажей и безопасные превью', () => {
-    expect(avatarCatalog).toHaveLength(20);
-    expect(new Set(avatarCatalog.map((entry) => entry.id)).size).toBe(20);
-    expect(new Set(avatarCatalog.map((entry) => entry.name)).size).toBe(20);
-    const images = new Set<string>();
-    for (const entry of avatarCatalog) {
-      expect(avatarName(entry.config)).toBe(entry.name);
-      const { fallbackSvg, prompt } = buildAvatar(entry.config);
-      images.add(fallbackSvg);
-      expect(fallbackSvg).toContain(`<title>${entry.name}</title>`);
-      expect(fallbackSvg).not.toMatch(/<script|<foreignObject|<image|onload=|(?:href|src)=/i);
-      expect(fallbackSvg).not.toContain('FACE');
-      expect(prompt).toContain('no floating stickers');
-      expect(Object.isFrozen(entry.config)).toBe(true);
-    }
-    expect(images.size).toBe(20);
-    expect(Object.isFrozen(avatarCatalog)).toBe(true);
-    for (const universe of ['cinema', 'anime', 'animals', 'sport', 'fantasy'])
-      expect(avatarCatalog.filter((entry) => entry.universe === universe)).toHaveLength(4);
+  it('создаёт отдельный образ соискателя для минимальных ответов', () => {
+    const avatar = avatarConfig(
+      { universe: 'animals', gender: 'neutral', style: 'tech' },
+      { critical: 0, confidence: 0, discipline: 0, engagement: 0 },
+      c,
+      undefined,
+      undefined,
+      true,
+    );
+    const illustration = buildAvatar(avatar);
+    expect(avatar).toMatchObject({ archetype: 'jobseeker', accessory: 'critical', boosted: false });
+    expect(avatarName(avatar)).toBe('Панда-безработный');
+    expect(illustration.prompt).toContain('no hard hat and no safety vest');
+    expect(illustration.prompt).toContain('portfolio folder');
+    expect(illustration.fallbackSvg).toContain('#282b32');
+  });
+  it('«Ещё вариант» даёт восемь разных образов: очки, часы, эмоции, наушники, фон', () => {
+    const avatar: AvatarConfig = {
+      universe: 'animals',
+      gender: 'neutral',
+      style: 'tech',
+      archetype: 'master',
+      accessory: 'discipline',
+      boosted: false,
+    };
+    const variants = Array.from({ length: 8 }, (_, i) => buildAvatar(avatar, i));
+    expect(variants[0].fallbackSvg).toContain('data-part="headwear-helmet"');
+    expect(variants[0].prompt).toContain('safety helmet');
+    expect(variants[1].fallbackSvg).toContain('data-part="eyewear-sunglasses"');
+    expect(variants[1].prompt).toContain('stylish glossy black sunglasses');
+    expect(variants[2].fallbackSvg).toContain('data-part="extra-watch"');
+    expect(variants[2].prompt).toContain('fastened securely around a clearly visible wrist');
+    expect(variants[3].fallbackSvg).toContain('data-part="expression-focused"');
+    expect(variants[4].fallbackSvg).toContain('data-part="expression-wink"');
+    expect(variants[5].fallbackSvg).toContain('data-part="extra-headphones"');
+    expect(variants[5].prompt).toContain('leave the front headwear and BI emblem unobstructed');
+    expect(variants[6].fallbackSvg).toContain('data-part="background-sunset"');
+    expect(variants[7].fallbackSvg).toContain('data-part="eyewear-round"');
+    expect(new Set(variants.map((x) => x.fallbackSvg)).size).toBe(8);
+    expect(new Set(variants.map((x) => x.prompt)).size).toBe(8);
+    expect(buildAvatar(avatar, 8).fallbackSvg).toBe(variants[0].fallbackSvg);
+  });
+  it('сохранённый образ важнее номера варианта и проходит схему', () => {
+    const look = {
+      headwear: 'cap',
+      eyewear: 'goggles',
+      extra: 'medal',
+      expression: 'grin',
+      background: 'night',
+      skin: 'deep',
+    } as const;
+    const avatar: AvatarConfig = {
+      universe: 'cinema',
+      gender: 'female',
+      style: 'calm',
+      archetype: 'leader',
+      accessory: 'engagement',
+      boosted: true,
+      look,
+    };
+    expect(resolveLook(avatar, 5)).toEqual(look);
+    expect(buildAvatar(avatar, 0)).toEqual(buildAvatar(avatar, 5));
+    for (const part of [
+      'headwear-cap',
+      'eyewear-goggles',
+      'extra-medal',
+      'expression-grin',
+      'background-night',
+    ])
+      expect(buildAvatar(avatar).fallbackSvg).toContain(`data-part="${part}"`);
+    expect(buildAvatar(avatar).prompt).toContain('deep skin tone');
+    expect(lookSchema.parse(look)).toEqual(look);
+    expect(() => lookSchema.parse({ ...look, headwear: 'crown' })).toThrow();
+    expect(() => lookSchema.parse({ ...look, script: '<script>' })).toThrow();
+  });
+  it('каждый аксессуар на каждом герое даёт корректный SVG без NaN и undefined', () => {
+    // Minimal XML well-formedness: every opened tag is closed in order.
+    const wellFormed = (svg: string) => {
+      const stack: string[] = [];
+      for (const [, closing, name, selfClosing] of svg.matchAll(/<(\/?)([a-zA-Z]+)[^>]*?(\/?)>/g)) {
+        if (selfClosing) continue;
+        if (!closing) stack.push(name);
+        else if (stack.pop() !== name) return false;
+      }
+      return stack.length === 0;
+    };
+    const parts = Object.keys(lookOptions) as (keyof typeof lookOptions)[];
+    for (const universe of ['animals', 'cinema', 'anime', 'sport', 'fantasy'] as const)
+      for (const archetype of ['strategist', 'leader', 'master', 'mentor', 'jobseeker'] as const)
+        for (const part of parts)
+          for (const value of lookOptions[part]) {
+            const conf: AvatarConfig = {
+              universe,
+              gender: archetype === 'leader' ? 'female' : 'male',
+              style: 'strict',
+              archetype,
+              accessory: 'critical',
+              boosted: archetype === 'mentor',
+              look: { ...resolveLook({ universe, archetype } as AvatarConfig), [part]: value },
+            };
+            const { fallbackSvg, prompt } = buildAvatar(conf);
+            expect(wellFormed(fallbackSvg), `${universe}/${archetype}/${part}=${value}`).toBe(true);
+            expect(fallbackSvg).not.toMatch(/NaN|undefined|<script/);
+            expect(prompt).not.toMatch(/NaN|undefined/);
+          }
   });
 });

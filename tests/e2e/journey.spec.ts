@@ -32,41 +32,76 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
   await navigate(page, 'Мой профиль');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
   await create(page);
-  await page.getByRole('radio', { name: '4 — нейтрально', exact: true }).click();
+  const answer =
+    'Сверю факты с проектом, проверю риски, согласую безопасный план и зафиксирую результат.';
+  const field = () => page.getByRole('textbox', { name: 'Ваш ответ', exact: true });
+  await expect(page.getByRole('button', { name: 'Далее', exact: true })).toBeDisabled();
+  await field().fill('Коротко');
+  await expect(page.getByRole('button', { name: 'Далее', exact: true })).toBeDisabled();
+  await field().fill(answer);
   await page.getByRole('button', { name: 'Далее', exact: true }).click();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   await context.setOffline(true);
-  await page.getByRole('radio', { name: '7 — полностью согласен', exact: true }).click();
+  const offlineAnswer = answer + ' Отмечу замечания в журнале.';
+  await field().fill(offlineAnswer);
   await expect(page.getByText('Сохранено на устройстве', { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Продолжить тест', exact: true }).click();
-  await expect(
-    page.getByRole('radio', { name: '7 — полностью согласен', exact: true }),
-  ).toHaveAttribute('aria-checked', 'true');
+  await expect(field()).toHaveValue(offlineAnswer);
   await page.getByRole('button', { name: 'Сохранить и выйти' }).click();
   await page.getByRole('button', { name: 'Продолжить тест', exact: true }).click();
-  await expect(
-    page.getByRole('radio', { name: '7 — полностью согласен', exact: true }),
-  ).toHaveAttribute('aria-checked', 'true');
+  await expect(field()).toHaveValue(offlineAnswer);
   await context.setOffline(false);
   await page.reload();
   await page.getByRole('button', { name: 'Продолжить тест', exact: true }).click();
-  await expect(
-    page.getByRole('radio', { name: '7 — полностью согласен', exact: true }),
-  ).toHaveAttribute('aria-checked', 'true');
-  await page.getByRole('radio', { name: '4 — нейтрально', exact: true }).click();
+  await expect(field()).toHaveValue(offlineAnswer);
+  for (let i = 2; i < 8; i++) {
+    await page.getByRole('button', { name: 'Далее', exact: true }).click();
+    await field().fill(answer);
+  }
+  const progressBar = page.locator('.question-progress > span');
+  const progressAtQuestionEight = await progressBar.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  for (let i = 0; i < 7; i++)
+    await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  const progressAtQuestionOne = await progressBar.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(progressAtQuestionOne).toBeLessThan(progressAtQuestionEight);
+  await field().fill(answer + ' Запишу результат.');
+  await page.getByRole('button', { name: 'Далее', exact: true }).click();
+  await field().fill(answer);
   for (let i = 2; i < 15; i++) {
     await page.getByRole('button', { name: 'Далее', exact: true }).click();
-    await page.getByRole('radio', { name: '4 — нейтрально', exact: true }).click();
+    await field().fill(answer);
   }
-  await page.getByRole('button', { name: 'Получить профиль', exact: true }).click();
+  await page.screenshot({ path: 'docs/written-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: 'docs/written-mobile.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+      .violations,
+  ).toEqual([]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: 'Отправить на анализ', exact: true }).click();
+  await expect(page.getByText('ИИ анализирует ответы…', { exact: true }).first()).toBeVisible();
   await page.getByLabel('Главное качество', { exact: true }).selectOption('critical');
   await page.getByLabel('Знак отличия', { exact: true }).selectOption('confidence');
   await page.getByRole('button', { name: 'Создать аватара' }).click();
   await expect(page.getByRole('heading', { name: 'Лис-стратег', exact: true })).toBeVisible();
-  await expect(page.getByRole('meter')).toHaveCount(4);
-  for (const m of await page.getByRole('meter').all())
-    expect(await m.getAttribute('aria-valuenow')).toBe('50');
+  const qualityMeters = page.locator('.qualities-panel').getByRole('meter');
+  await expect(qualityMeters).toHaveCount(4);
+  expect(await qualityMeters.nth(0).getAttribute('aria-valuenow')).toBe('50');
+  expect(await qualityMeters.nth(1).getAttribute('aria-valuenow')).toBe('50');
+  expect(await qualityMeters.nth(2).getAttribute('aria-valuenow')).toBe('38');
+  expect(await qualityMeters.nth(3).getAttribute('aria-valuenow')).toBe('50');
+  const profile = await (await page.request.get('/api/profile/employee')).json();
+  expect(profile.writtenReview.items[0].answer).toBe(answer + ' Запишу результат.');
+  expect(profile.writtenReview.items[1].answer).toBe(answer);
+  expect(profile.writtenReview.model).toBe('e2e-fixture');
+  await expect(page.getByRole('heading', { name: 'Анализ ответов', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Сильные стороны', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Зоны роста', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Пройти снова' })).toBeDisabled();
@@ -144,7 +179,8 @@ test('главная BI: баннеры, свой профиль, маршрут
   await expect(
     page.getByRole('heading', { name: 'Стройте своё будущее', exact: true }),
   ).toBeVisible();
-  await expect(page.locator('.home-quality-card strong')).toHaveText(['50%', '50%', '50%', '50%']);
+  // Same profile the first journey test produces (question 1 answered with 1 → discipline 38%).
+  await expect(page.locator('.home-quality-card strong')).toHaveText(['50%', '50%', '38%', '50%']);
   await page.screenshot({ path: 'docs/site-preview.png' });
   await page.screenshot({ path: 'docs/home-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Начать развитие', exact: true }).click();
@@ -158,7 +194,7 @@ test('главная BI: баннеры, свой профиль, маршрут
   await page.getByRole('button', { name: 'К маршруту', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Мой маршрут', exact: true })).toBeVisible();
   await expect(page.locator('.route-stage')).toHaveCount(4);
-  await page.getByRole('button', { name: 'К модулю', exact: true }).click();
+  await page.getByRole('button', { name: 'К модулю', exact: true }).first().click();
   await expect(page.getByRole('status')).toContainText('Модуль пока не подключён.');
   await page.screenshot({ path: 'docs/route-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -217,32 +253,118 @@ test('ранг: выполнение практики, проверка руко
   const a11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(a11y.violations).toEqual([]);
 });
-
-test('каталог: 20 героев, фильтр вселенной, изменение стиля и телефон', async ({ page }) => {
+test('аватар: настройка образа с превью, отмена по Esc и сохранение', async ({ page }) => {
   await auth(page);
   await page.goto('/');
-  await navigate(page, 'Персонажи');
-  await expect(page.locator('.avatar-catalog-card')).toHaveCount(20);
-  await page.getByRole('button', { name: 'Животные', exact: true }).click();
-  await expect(page.locator('.avatar-catalog-card')).toHaveCount(4);
-  await page.getByLabel('Стиль', { exact: true }).selectOption('bright');
-  await expect(page.getByRole('heading', { name: 'Лис-стратег', exact: true })).toBeVisible();
-  await page.screenshot({ path: 'docs/avatars-desktop.png', fullPage: true });
-  await page.setViewportSize({ width: 375, height: 812 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'docs/avatars-mobile.png', fullPage: true });
-  const a11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
-  expect(a11y.violations).toEqual([]);
-});
-
-test('настройки: редактирование имени и сохранение после перезагрузки', async ({ page }) => {
-  await auth(page);
-  await page.goto('/');
-  await navigate(page, 'Настройки');
-  await page.getByLabel('Должность', { exact: true }).fill('Инженер участка');
-  await page.getByRole('button', { name: 'Сохранить изменения', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Данные сохранены');
+  await navigate(page, 'Мой профиль');
+  const image = page.locator('.avatar-stage > img');
+  const before = await image.getAttribute('src');
+  await page.getByRole('button', { name: 'Настроить образ' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Образ героя' });
+  await expect(dialog).toBeVisible();
+  const preview = dialog.getByRole('img', { name: 'Предпросмотр аватара' });
+  const initial = await preview.getAttribute('src');
+  await dialog.getByRole('button', { name: 'Кепка', exact: true }).click();
+  await expect(preview).not.toHaveAttribute('src', initial!);
+  const accessibility = await new AxeBuilder({ page })
+    .include('.avatar-editor')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations.map((v) => v.id)).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(image).toHaveAttribute('src', before!);
+  await page.getByRole('button', { name: 'Настроить образ' }).click();
+  await dialog.getByRole('button', { name: 'Кепка', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Солнцезащитные', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Медаль', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Ночь', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Сохранить образ' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(image).toHaveAttribute('src', /\/image\?v=\d+$/);
+  const svg = await (await page.request.get((await image.getAttribute('src'))!)).text();
+  for (const part of ['headwear-cap', 'eyewear-sunglasses', 'extra-medal', 'background-night'])
+    expect(svg).toContain(`data-part="${part}"`);
+  expect(await image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   await page.reload();
-  await navigate(page, 'Настройки');
-  await expect(page.getByLabel('Должность', { exact: true })).toHaveValue('Инженер участка');
+  await navigate(page, 'Мой профиль');
+  await expect(image).toHaveAttribute('src', /\/image\?v=\d+$/);
+});
+test('тёмная тема: переключатель, запоминание, системная настройка и контраст WCAG AA', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120000);
+  const violations = async (target: Page = page) =>
+    (
+      await new AxeBuilder({ page: target }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+    ).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }));
+  const html = page.locator('html');
+  await auth(page);
+  await page.goto('/');
+  const toggle = page.locator('.header-actions').getByRole('button', { name: 'Тёмная тема' });
+  await expect(html).toHaveAttribute('data-theme', 'light');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  const colours = () =>
+    page.evaluate(() => [
+      getComputedStyle(document.documentElement).backgroundColor,
+      getComputedStyle(document.querySelector('.site-header')!).backgroundColor,
+    ]);
+  expect(await colours()).toEqual(['rgb(14, 18, 27)', 'rgb(23, 28, 40)']);
+  await expect(
+    page.getByRole('heading', { name: 'Стройте своё будущее', exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: 'docs/home-dark.png', fullPage: true });
+  expect(await violations()).toEqual([]);
+  await navigate(page, 'Мой профиль');
+  await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
+  await page.screenshot({ path: 'docs/profile-dark.png', fullPage: true });
+  expect(await violations()).toEqual([]);
+  await page.getByRole('button', { name: 'Настроить образ' }).click();
+  await expect(page.getByRole('dialog', { name: 'Образ героя' })).toBeVisible();
+  expect(await violations()).toEqual([]);
+  await page.keyboard.press('Escape');
+  await navigate(page, 'Мой маршрут');
+  await page
+    .getByRole('region', { name: 'Ранг развития', exact: true })
+    .getByText('Практики для роста', { exact: true })
+    .click();
+  expect(await violations()).toEqual([]);
+  for (const [role, section] of [
+    ['manager', 'Моя команда'],
+    ['methodologist', 'Методика и контент'],
+    ['admin', 'Администрирование'],
+  ]) {
+    await page.getByLabel('Демонстрационная роль').selectOption(role);
+    await navigate(page, section);
+    await expect(page.locator('.content')).not.toBeEmpty();
+    expect(await violations(), `${role}: ${section}`).toEqual([]);
+  }
+  // The choice survives a reload, and on a phone the switch moves into the user menu.
+  await page.reload();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(toggle).toBeHidden();
+  await page.locator('.user-trigger').click();
+  const item = page.locator('.user-panel').getByRole('button', { name: 'Тёмная тема' });
+  await expect(item).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'docs/menu-dark-mobile.png' });
+  await item.click();
+  await expect(html).toHaveAttribute('data-theme', 'light');
+  // Without a saved choice the page follows the OS setting, including live changes.
+  const context = await browser.newContext({ baseURL, colorScheme: 'dark' });
+  const fresh = await context.newPage();
+  await fresh.goto('/');
+  await expect(fresh.getByRole('heading', { name: 'С возвращением', exact: true })).toBeVisible();
+  await expect(fresh.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await fresh.screenshot({ path: 'docs/auth-dark.png', fullPage: true });
+  expect(await violations(fresh)).toEqual([]);
+  await fresh.emulateMedia({ colorScheme: 'light' });
+  await expect(fresh.locator('html')).toHaveAttribute('data-theme', 'light');
+  await context.close();
 });

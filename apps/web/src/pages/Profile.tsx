@@ -1,13 +1,24 @@
 import RankCard from '../RankCard';
-import { X } from 'lucide-react';
+import AvatarEditor from '../AvatarEditor';
+import { Palette, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { scaleIds, type Scores, type TestConfig } from '../../../../packages/core/src/index';
 import { api } from '../api';
+import {
+  avatarName,
+  interpretation,
+  questionText,
+  recText,
+  recTitle,
+  scaleLabel,
+  scaleShort,
+  strongUse,
+} from '../content';
 import { t } from '../localization';
 import {
   date,
   Disclaimer,
-  levelLabels,
+  levelLabel,
   placeholder,
   ui,
   type AvatarView,
@@ -34,7 +45,8 @@ export default function Profile({
     [regens, setRegens] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [notice, setNotice] = useState('');
+    [notice, setNotice] = useState(''),
+    [editing, setEditing] = useState(false);
   const [avatar, setAvatar] = useState(p.avatar);
   useEffect(() => {
     setAvatar(p.avatar);
@@ -134,7 +146,10 @@ export default function Profile({
           <div className="result-grid">
             <section className="avatar-panel panel">
               <div className={`avatar-stage ${pending ? 'pending' : ''}`}>
-                <img src={avatar?.imageUrl ?? placeholder} alt={avatar?.name ?? t('text070')} />
+                <img
+                  src={avatar?.imageUrl ?? placeholder}
+                  alt={avatar ? avatarName(avatar) : t('text070')}
+                />
                 {pending && (
                   <div className="generation-overlay">
                     <div className="spinner" />
@@ -143,7 +158,7 @@ export default function Profile({
                   </div>
                 )}
               </div>
-              <h2>{avatar?.name}</h2>
+              <h2>{avatar && avatarName(avatar)}</h2>
               <p className="avatar-sub">
                 {avatar?.status === 'fallback'
                   ? t('text073')
@@ -151,6 +166,32 @@ export default function Profile({
                     ? t('text074')
                     : t('text075')}
               </p>
+              {!readOnly && avatar && (
+                <button
+                  className="button secondary customize-button"
+                  disabled={busy || pending || !variants.some((a) => a.id === avatar.id)}
+                  onClick={() => setEditing(true)}
+                >
+                  <Palette size={17} aria-hidden="true" />
+                  {t('avatar.customize')}
+                </button>
+              )}
+              {editing && avatar && (
+                <AvatarEditor
+                  avatar={avatar}
+                  variant={Math.max(
+                    0,
+                    variants.findIndex((a) => a.id === avatar.id),
+                  )}
+                  onClose={() => setEditing(false)}
+                  onSaved={async (updated) => {
+                    setEditing(false);
+                    await loadAvatars().catch(() => undefined);
+                    // Keep the edited variant on screen even if it is not the fixed or newest one.
+                    setAvatar(updated);
+                  }}
+                />
+              )}
               {!readOnly && !avatar?.fixed && (
                 <>
                   <div className="variants">
@@ -200,7 +241,7 @@ export default function Profile({
                   return (
                     <div className="score-row" key={s}>
                       <div className="score-label">
-                        <span>{p.scales[s].label}</span>
+                        <span>{scaleLabel(p.scales, s)}</span>
                         <b>
                           {r.percentages[s]}
                           <small>%</small>
@@ -209,7 +250,7 @@ export default function Profile({
                       <div
                         className="score-track"
                         role="meter"
-                        aria-label={p.scales[s].label}
+                        aria-label={scaleLabel(p.scales, s)}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={r.percentages[s]}
@@ -217,7 +258,7 @@ export default function Profile({
                         <span className={r.levels[s]} style={{ width: `${r.percentages[s]}%` }} />
                       </div>
                       <div className={`level-text ${r.levels[s]}`}>
-                        {levelLabels[r.levels[s]]}
+                        {levelLabel(r.levels[s])}
                         {t('text084')}
                       </div>
                     </div>
@@ -229,9 +270,97 @@ export default function Profile({
               </div>
             </section>
           </div>
+          {!readOnly && p.writtenReview && (
+            <section className="panel written-review">
+              <h2>{t('written.review')}</h2>
+              <p>{p.writtenReview.summary}</p>
+              <div className="written-insights">
+                {p.writtenReview.scales?.map((item) => (
+                  <details className="explanation" key={item.scale}>
+                    <summary>{scaleLabel(p.scales, item.scale)}</summary>
+                    <p>{item.explanation}</p>
+                  </details>
+                ))}
+              </div>
+              <details className="answer-details">
+                <summary>{t('written.myAnswers')}</summary>
+                <ol>
+                  {p.writtenReview.items.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <h3>{questionText(item)}</h3>
+                        <p className="written-response">{item.answer}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+              <p className="muted">{t('written.limits')}</p>
+            </section>
+          )}
+          {p.answerStatistics && (
+            <section className="panel answer-statistics">
+              <div className="panel-top">
+                <div>
+                  <h2>{t('profile.answerStatistics')}</h2>
+                  <p className="muted">{t('profile.answerScale')}</p>
+                </div>
+                <strong className="answer-average">
+                  {p.answerStatistics.average}
+                  <small>/ 7</small>
+                </strong>
+              </div>
+              <div className="answer-distribution" aria-label={t('profile.answerDistribution')}>
+                {p.answerStatistics.distribution.map(({ value, count }) => (
+                  <div className="answer-bin" key={value}>
+                    <span>{value}</span>
+                    <div
+                      className="answer-bin-track"
+                      role="meter"
+                      aria-label={t('profile.ratingCount', { value })}
+                      aria-valuemin={0}
+                      aria-valuemax={p.answerStatistics!.count}
+                      aria-valuenow={count}
+                    >
+                      <span
+                        style={{
+                          height: `${(count / p.answerStatistics!.count) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <small>{count}</small>
+                  </div>
+                ))}
+              </div>
+              <details className="answer-details">
+                <summary>
+                  {t('profile.questionAnswers', { count: p.answerStatistics.count })}
+                </summary>
+                <ol>
+                  {p.answerStatistics.items.map((item, index) => (
+                    <li key={item.id}>
+                      <div className="answer-question-copy">
+                        <small>{t('profile.questionNumber', { number: index + 1 })}</small>
+                        <p>{questionText(item)}</p>
+                        <span>
+                          {item.scales.map((scale) => scaleLabel(p.scales, scale)).join(' · ')}
+                        </span>
+                      </div>
+                      <div className="answer-item-rating">
+                        <b>{item.answer}/7</b>
+                        <div className="answer-item-track" aria-hidden="true">
+                          <span style={{ width: `${(item.answer / 7) * 100}%` }} />
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            </section>
+          )}
           {r.qualityFlags.length > 0 && (
             <div className="quality-warning">
-              <p>{ui.qualityWarning}</p>
+              <p>{ui().qualityWarning}</p>
             </div>
           )}
           <div className="insights-grid">
@@ -242,10 +371,10 @@ export default function Profile({
               {r.strong.map((s) => (
                 <details className="interpretation explanation" key={s}>
                   <summary>
-                    <span>{p.scales[s].label}</span>
+                    <span>{scaleLabel(p.scales, s)}</span>
                     <span>{r.percentages[s]}%</span>
                   </summary>
-                  <p>{p.scales[s].interpretations[r.levels[s]]}</p>
+                  <p>{interpretation(p.scales, s, r.levels[s])}</p>
                 </details>
               ))}
             </section>
@@ -256,10 +385,10 @@ export default function Profile({
               {r.growth.map((s) => (
                 <details className="interpretation explanation" key={s}>
                   <summary>
-                    <span>{p.scales[s].label}</span>
+                    <span>{scaleLabel(p.scales, s)}</span>
                     <span>{r.percentages[s]}%</span>
                   </summary>
-                  <p>{p.scales[s].interpretations[r.levels[s]]}</p>
+                  <p>{interpretation(p.scales, s, r.levels[s])}</p>
                 </details>
               ))}
             </section>
@@ -286,10 +415,10 @@ export default function Profile({
                         }
                       </span>
                     </div>
-                    <span className="rec-scale">{p.scales[rec.scale].label}</span>
+                    <span className="rec-scale">{scaleLabel(p.scales, rec.scale)}</span>
                     <details className="rec-copy explanation">
-                      <summary>{rec.title}</summary>
-                      <p>{rec.text}</p>
+                      <summary>{recTitle(rec)}</summary>
+                      <p>{recText(rec)}</p>
                     </details>
                     <div className="rec-footer">
                       <span>
@@ -327,7 +456,7 @@ export default function Profile({
               {r.strongUse && (
                 <details className="strong-use explanation">
                   <summary>{t('applyStrength')}</summary>
-                  <p>{r.strongUse}</p>
+                  <p>{strongUse(r, p.scales)}</p>
                 </details>
               )}
               {notice && (
@@ -340,7 +469,7 @@ export default function Profile({
               )}
               <section className="next-step">
                 <div>
-                  <h2>{r.nextStep.title}</h2>
+                  <h2>{recTitle(r.nextStep)}</h2>
                   <button
                     className="button primary"
                     onClick={() => void openModule(r.nextStep.link)}
@@ -369,7 +498,7 @@ export default function Profile({
                     <tr>
                       <th>{t('text108')}</th>
                       {scaleIds.map((s) => (
-                        <th key={s}>{p.scales[s].short}</th>
+                        <th key={s}>{scaleShort(p.scales, s)}</th>
                       ))}
                     </tr>
                   </thead>
@@ -383,7 +512,7 @@ export default function Profile({
                         {scaleIds.map((s) => (
                           <td key={s}>
                             {h.percentages[s]}%
-                            {i > 0 && (
+                            {i > 0 && h.responseFormat === p.history[i - 1].responseFormat && (
                               <small
                                 className={
                                   h.percentages[s] >= p.history[i - 1].percentages[s]
@@ -432,45 +561,41 @@ function Radar({ scores, labels }: { scores: Scores; labels: TestConfig['scales'
       viewBox="0 0 260 205"
       role="img"
       aria-label={t('text113', {
-        v0: scaleIds.map((s) => `${labels[s].label} ${scores[s]}%`).join(', '),
+        v0: scaleIds.map((s) => `${scaleLabel(labels, s)} ${scores[s]}%`).join(', '),
       })}
     >
       <title>{t('text114')}</title>
       {[0.25, 0.5, 0.75, 1].map((v) => (
         <polygon
           key={v}
+          className="radar-grid"
           points={scaleIds.map((_, i) => point(i, v)).join(' ')}
-          fill="none"
-          stroke="#e1e6f1"
         />
       ))}
       {scaleIds.map((_, i) => (
         <line
           key={i}
+          className="radar-grid"
           x1="130"
           y1="100"
           x2={point(i, 1).split(',')[0]}
           y2={point(i, 1).split(',')[1]}
-          stroke="#e1e6f1"
         />
       ))}
       <polygon
+        className="radar-shape"
         points={scaleIds.map((s, i) => point(i, scores[s] / 100)).join(' ')}
-        fill="#304fe5"
-        fillOpacity=".25"
-        stroke="#304fe5"
-        strokeWidth="2"
       />
       {scaleIds.map((s, i) => (
         <circle
           key={s}
+          className="radar-dot"
           cx={point(i, scores[s] / 100).split(',')[0]}
           cy={point(i, scores[s] / 100).split(',')[1]}
           r="3.5"
-          fill="#304fe5"
         />
       ))}
-      <g fill="#727489" fontSize="10" fontFamily="sans-serif">
+      <g fontSize="10" fontFamily="sans-serif">
         <text x="130" y="18" textAnchor="middle">
           {t('text115')}
         </text>

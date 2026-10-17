@@ -29,7 +29,7 @@ export function twilioSender(): SendAuthSms {
         body: new URLSearchParams({
           To: to,
           From: process.env.TWILIO_FROM!,
-          Body: `Bilim: ${code}. Код действует 5 минут. Никому его не сообщайте.`,
+          Body: `BI Group: ${code}. Код действует 5 минут. Никому его не сообщайте.`,
         }),
         signal: AbortSignal.timeout(10000),
       },

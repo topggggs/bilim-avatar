@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, HttpError } from '../api';
 import { t } from '../localization';
+import { LanguageMenu, ThemeToggle } from '../Menus';
+import { Brand } from '../shared';
 export type AuthMode = {
   demo: boolean;
   local: boolean;
@@ -9,83 +11,15 @@ export type AuthMode = {
   phone: boolean;
 };
 export type AuthLink = { kind: 'verify' | 'reset'; token: string } | null;
-type PendingView = 'sent' | 'code' | 'complete' | 'reset';
-type AuthProgress = {
-  view: PendingView;
-  expiresAt: number;
-  retryAt: number;
-  channel: 'email' | 'phone';
-  email: string;
-  phone: string;
-  sentKind: 'register' | 'forgot';
-  challenge: string;
-  grant: string;
-  preview: string;
-  previewCode: string;
-};
-const progressKey = 'bilim-auth-progress';
-const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
-export function clearAuthFlow() {
-  try {
-    sessionStorage.removeItem(progressKey);
-  } catch {}
-}
-function saveProgress(progress: AuthProgress) {
-  try {
-    sessionStorage.setItem(progressKey, JSON.stringify(progress));
-  } catch {}
-}
-function readProgress(): AuthProgress | null {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(progressKey) ?? 'null');
-    if (
-      saved &&
-      ['sent', 'code', 'complete', 'reset'].includes(saved.view) &&
-      Number.isFinite(saved.expiresAt) &&
-      saved.expiresAt > Date.now() &&
-      saved.expiresAt <= Date.now() + 30 * 60000 &&
-      Number.isFinite(saved.retryAt) &&
-      ['email', 'phone'].includes(saved.channel) &&
-      ['register', 'forgot'].includes(saved.sentKind) &&
-      ['email', 'phone', 'challenge', 'grant', 'preview', 'previewCode'].every(
-        (field) => typeof saved[field] === 'string',
-      ) &&
-      (!['complete', 'reset'].includes(saved.view) || tokenPattern.test(saved.grant))
-    )
-      return saved;
-  } catch {}
-  clearAuthFlow();
-  return null;
-}
 export function readAuthLink(): AuthLink {
   const params = new URLSearchParams(location.hash.slice(1));
   const kind = params.has('verify') ? 'verify' : params.has('reset') ? 'reset' : null;
-  if (!kind) {
-    const saved = readProgress();
-    return saved && ['complete', 'reset'].includes(saved.view)
-      ? { kind: saved.view === 'complete' ? 'verify' : 'reset', token: saved.grant }
-      : null;
-  }
+  if (!kind) return null;
   const token = params.get(kind) ?? '';
   history.replaceState(null, '', location.pathname + location.search);
-  clearAuthFlow();
-  if (tokenPattern.test(token))
-    saveProgress({
-      view: kind === 'verify' ? 'complete' : 'reset',
-      expiresAt: Date.now() + (kind === 'verify' ? 30 : 15) * 60000,
-      retryAt: 0,
-      channel: 'email',
-      email: '',
-      phone: '+7',
-      sentKind: kind === 'verify' ? 'register' : 'forgot',
-      challenge: '',
-      grant: token,
-      preview: '',
-      previewCode: '',
-    });
   return { kind, token };
 }
-type View = 'login' | 'register' | 'forgot' | 'updated' | 'invalid' | PendingView;
+type View = 'login' | 'register' | 'sent' | 'complete' | 'forgot' | 'reset' | 'updated' | 'code';
 export default function Auth({
   mode,
   link,
@@ -97,26 +31,16 @@ export default function Auth({
   onDone: () => Promise<void>;
   initialError?: string;
 }) {
-  const [restored] = useState(() => {
-    const saved = readProgress();
-    return !mode.local || (!mode.phone && saved?.channel === 'phone') ? null : saved;
-  });
   const [view, setView] = useState<View>(
-    link
-      ? tokenPattern.test(link.token)
-        ? link.kind === 'verify'
-          ? 'complete'
-          : 'reset'
-        : 'invalid'
-      : (restored?.view ?? 'login'),
+    link ? (link.kind === 'verify' ? 'complete' : 'reset') : 'login',
   );
-  const [channel, setChannel] = useState<'email' | 'phone'>(restored?.channel ?? 'email');
-  const [phone, setPhone] = useState(restored?.phone ?? '+7');
+  const [channel, setChannel] = useState<'email' | 'phone'>('email');
+  const [phone, setPhone] = useState('+7');
   const [code, setCode] = useState('');
-  const [challenge, setChallenge] = useState(restored?.challenge ?? '');
-  const [previewCode, setPreviewCode] = useState(restored?.previewCode ?? '');
-  const [grant, setGrant] = useState(link?.token ?? restored?.grant ?? '');
-  const [email, setEmail] = useState(restored?.email ?? '');
+  const [challenge, setChallenge] = useState('');
+  const [previewCode, setPreviewCode] = useState('');
+  const [grant, setGrant] = useState(link?.token ?? '');
+  const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [position, setPosition] = useState('');
   const [password, setPassword] = useState('');
@@ -126,60 +50,16 @@ export default function Auth({
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState(initialError);
-  const [preview, setPreview] = useState(restored?.preview ?? '');
-  const [sentKind, setSentKind] = useState<'register' | 'forgot'>(
-    link?.kind === 'reset' ? 'forgot' : (restored?.sentKind ?? 'register'),
-  );
-  const [retryAt, setRetryAt] = useState(restored?.retryAt ?? 0);
-  const [expiresAt, setExpiresAt] = useState(restored?.expiresAt ?? 0);
-  const [clock, setClock] = useState(Date.now);
-  const cooldown = Math.max(0, Math.ceil((retryAt - clock) / 1000));
+  const [preview, setPreview] = useState('');
+  const [sentKind, setSentKind] = useState<'register' | 'forgot'>('register');
+  const [cooldown, setCooldown] = useState(0);
   const title = useRef<HTMLHeadingElement>(null);
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    const tick = () => setClock(Date.now());
-    tick();
-    if (!retryAt) return;
-    const timer = setInterval(tick, 1000);
-    document.addEventListener('visibilitychange', tick);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', tick);
-    };
-  }, [retryAt]);
-  useEffect(() => {
-    if (!['sent', 'code', 'complete', 'reset'].includes(view)) {
-      clearAuthFlow();
-      return;
-    }
-    saveProgress({
-      view: view as PendingView,
-      expiresAt,
-      retryAt,
-      channel,
-      email,
-      phone,
-      sentKind,
-      challenge,
-      grant,
-      // Demo previews are never saved in production; passwords and entered codes never are.
-      preview: mode.preview ? preview : '',
-      previewCode: mode.preview ? previewCode : '',
-    });
-  }, [
-    view,
-    expiresAt,
-    retryAt,
-    channel,
-    email,
-    phone,
-    sentKind,
-    challenge,
-    grant,
-    preview,
-    previewCode,
-    mode.preview,
-  ]);
+    if (!cooldown) return;
+    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
   const needsPassword = ['login', 'complete', 'reset'].includes(view);
   const isNewPassword = view === 'complete' || view === 'reset';
   function go(next: View) {
@@ -190,23 +70,7 @@ export default function Auth({
     setErrors({});
     setError('');
     setShowPassword(false);
-    setCode('');
-    if (['login', 'register', 'forgot', 'updated', 'invalid'].includes(next)) {
-      clearAuthFlow();
-      setGrant('');
-      setChallenge('');
-      setPreview('');
-      setPreviewCode('');
-    }
     setTimeout(() => title.current?.focus(), 0);
-  }
-  function changeChannel(next: 'email' | 'phone') {
-    setChannel(next);
-    setPassword('');
-    setConfirmation('');
-    setShowPassword(false);
-    setErrors({});
-    setError('');
   }
   function clearField(field: string) {
     setErrors((current) => {
@@ -252,8 +116,7 @@ export default function Auth({
     );
     setPreview(mode.preview ? (data.previewLink ?? '') : '');
     setSentKind(kind);
-    setRetryAt(Date.now() + (data.retryAfter ?? 60) * 1000);
-    setExpiresAt(Date.now() + (kind === 'register' ? 30 : 15) * 60000);
+    setCooldown(data.retryAfter ?? 60);
     go('sent');
   }
   async function requestContact(kind: 'register' | 'forgot') {
@@ -265,14 +128,12 @@ export default function Auth({
     setChallenge(data.challengeId);
     setPreviewCode(mode.preview ? (data.previewCode ?? '') : '');
     setSentKind(kind);
-    setRetryAt(Date.now() + (data.retryAfter ?? 60) * 1000);
-    setExpiresAt(Date.now() + 5 * 60000);
+    setCooldown(data.retryAfter ?? 60);
     setCode('');
     go('code');
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (busy) return;
     if (!validate()) return;
     setBusy(true);
     setError('');
@@ -284,12 +145,10 @@ export default function Auth({
           password,
         });
         setPassword('');
-        clearAuthFlow();
         await onDone();
       } else if (view === 'code') {
         const data = await api('/auth/phone/verify', 'POST', { challengeId: challenge, code });
         setGrant(data.token);
-        setExpiresAt(Date.now() + 10 * 60000);
         go(data.kind === 'signup' ? 'complete' : 'reset');
       } else if (view === 'complete') {
         await api('/auth/register/complete', 'POST', {
@@ -301,7 +160,6 @@ export default function Auth({
         });
         setPassword('');
         setConfirmation('');
-        clearAuthFlow();
         await onDone();
       } else if (view === 'reset') {
         const contact = await api('/auth/password/reset', 'POST', { token: grant, password });
@@ -318,10 +176,6 @@ export default function Auth({
     } catch (e) {
       setError((e as Error).message);
       if (e instanceof HttpError && e.data.fields) setErrors(e.data.fields);
-      else if (e instanceof HttpError && e.status === 400 && ['complete', 'reset'].includes(view)) {
-        setView('invalid');
-        clearAuthFlow();
-      }
     } finally {
       setBusy(false);
     }
@@ -335,7 +189,6 @@ export default function Auth({
     reset: t('auth.newPassword'),
     updated: t('auth.updated'),
     code: t('auth.enterCode'),
-    invalid: t('auth.invalidLink'),
   };
   const invalid = (field: string) => ({
     'aria-invalid': !!errors[field],
@@ -349,22 +202,19 @@ export default function Auth({
     );
   return (
     <main className="auth-page">
-      <aside className="auth-visual" aria-label={t('auth.academy')}>
-        <a className="brand auth-brand" href="/">
-          <span className="brand-badge">BI</span>
-          <strong>BILIM</strong>
+      <aside className="auth-visual" aria-label="BI Group">
+        <a className="brand auth-brand" href="/" aria-label="BI Group">
+          <Brand />
         </a>
         <div className="auth-visual-copy">
-          <span>BI ACADEMY</span>
           <h2>{t('auth.hero')}</h2>
           <p>{t('auth.heroCaption')}</p>
         </div>
-        <span className="auth-visual-footer">Bilim · BuildEX · BIU</span>
       </aside>
       <section className="auth-form-side">
         <div className="auth-top">
-          <span>{t('auth.academy')}</span>
-          <span>RU</span>
+          <ThemeToggle />
+          <LanguageMenu />
         </div>
         <div className="auth-card">
           {mode.local && ['login', 'register'].includes(view) && (
@@ -406,7 +256,11 @@ export default function Auth({
                 type="button"
                 aria-pressed={channel === 'email'}
                 disabled={busy}
-                onClick={() => changeChannel('email')}
+                onClick={() => {
+                  setChannel('email');
+                  setErrors({});
+                  setError('');
+                }}
               >
                 {t('auth.byEmail')}
               </button>
@@ -414,7 +268,11 @@ export default function Auth({
                 type="button"
                 aria-pressed={channel === 'phone'}
                 disabled={busy}
-                onClick={() => changeChannel('phone')}
+                onClick={() => {
+                  setChannel('phone');
+                  setErrors({});
+                  setError('');
+                }}
               >
                 {t('auth.byPhone')}
               </button>
@@ -425,7 +283,7 @@ export default function Auth({
               {error}
             </div>
           )}
-          {mode.local && !['sent', 'updated', 'invalid'].includes(view) && (
+          {mode.local && !['sent', 'updated'].includes(view) && (
             <form ref={form} onSubmit={(e) => void submit(e)} noValidate aria-busy={busy}>
               <fieldset disabled={busy}>
                 {['login', 'register', 'forgot'].includes(view) && channel === 'email' && (
@@ -656,32 +514,23 @@ export default function Auth({
             </form>
           )}
           {view === 'code' && (
-            <>
-              <button
-                className="text-button auth-back"
-                disabled={busy || cooldown > 0}
-                onClick={async () => {
-                  setBusy(true);
-                  setError('');
-                  try {
-                    await requestContact(sentKind);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {cooldown ? t('auth.resendIn', { seconds: cooldown }) : t('auth.resendCode')}
-              </button>
-              <button
-                className="text-button auth-back"
-                disabled={busy}
-                onClick={() => go(sentKind)}
-              >
-                {t('auth.changePhone')}
-              </button>
-            </>
+            <button
+              className="text-button auth-back"
+              disabled={busy || cooldown > 0}
+              onClick={async () => {
+                setBusy(true);
+                setError('');
+                try {
+                  await requestContact(sentKind);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {cooldown ? t('auth.resendIn', { seconds: cooldown }) : t('auth.resendCode')}
+            </button>
           )}
           {view === 'sent' && (
             <div className="auth-sent" role="status">
@@ -723,20 +572,12 @@ export default function Auth({
               </button>
             </div>
           )}
-          {view === 'invalid' && (
-            <div className="auth-sent">
-              {!error && <p role="status">{t('auth.invalidCaption')}</p>}
-              <button className="button primary auth-submit" onClick={() => go(sentKind)}>
-                {t('auth.requestAgain')}
-              </button>
-            </div>
-          )}
           {mode.oidc && (
             <a className="button primary auth-submit" href="/api/auth/login">
               {t('auth.sso')}
             </a>
           )}
-          {['forgot', 'complete', 'reset', 'sent', 'code', 'invalid'].includes(view) && (
+          {['forgot', 'complete', 'reset', 'sent', 'code'].includes(view) && (
             <button className="text-button auth-back" disabled={busy} onClick={() => go('login')}>
               {t('auth.back')}
             </button>
@@ -762,7 +603,6 @@ export default function Auth({
             </button>
           )}
         </div>
-        <footer className="auth-footer">BI Academy · {new Date().getFullYear()}</footer>
       </section>
     </main>
   );

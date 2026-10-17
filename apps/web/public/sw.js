@@ -1,5 +1,5 @@
 // Cache only the app shell and hashed public assets. Never cache API responses or employee data.
-const CACHE = 'bilim-shell-v2';
+const CACHE = 'bilim-shell-v3-written';
 self.addEventListener('install', (e) => {
   e.waitUntil(
     (async () => {

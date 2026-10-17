@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   choices,
-  avatarCatalog,
-  buildAvatar,
   type Appearance,
   type Scale,
   type Scores,
   type TestConfig,
 } from '../../../../packages/core/src/index';
+import { MIN_ANSWER_LENGTH, MAX_ANSWER_LENGTH } from '../../../../packages/core/src/written';
 import type { Session, User } from '../../../api/src/store';
 import { api, HttpError } from '../api';
-import { t } from '../localization';
+import { questionText, scaleLabel } from '../content';
+import { t, type Key } from '../localization';
 import { ui, type Draft } from '../shared';
-const universes = [
-  { id: 'cinema', title: t('text119') },
-  { id: 'anime', title: t('text121') },
-  { id: 'animals', title: t('text123') },
-  { id: 'sport', title: t('text125') },
-  { id: 'fantasy', title: t('text127') },
+const universes: { id: Appearance['universe']; title: Key }[] = [
+  { id: 'cinema', title: 'text119' },
+  { id: 'anime', title: 'text121' },
+  { id: 'animals', title: 'text123' },
+  { id: 'sport', title: 'text125' },
+  { id: 'fantasy', title: 'text127' },
 ];
 export default function TestFlow({
   user,
@@ -27,7 +27,6 @@ export default function TestFlow({
   onDone,
   onDraft,
   offline,
-  initialAppearance,
 }: {
   user: User;
   config: TestConfig;
@@ -36,12 +35,10 @@ export default function TestFlow({
   onDone: () => void;
   onDraft: (d: Draft) => void;
   offline: boolean;
-  initialAppearance?: Appearance;
 }) {
   const [stage, setStage] = useState(draft ? 4 : 0),
     [appearance, setAppearance] = useState<Appearance>(
-      draft?.session.appearance ??
-        initialAppearance ?? { universe: 'animals', gender: 'neutral', style: 'tech' },
+      draft?.session.appearance ?? { universe: 'animals', gender: 'neutral', style: 'tech' },
     ),
     [consent, setConsent] = useState(false),
     [session, setSession] = useState(draft?.session ?? null),
@@ -49,27 +46,44 @@ export default function TestFlow({
     [index, setIndex] = useState(draft?.index ?? 0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [syncStatus, setSyncStatus] = useState(t('text129')),
+    [analysisAvailable, setAnalysisAvailable] = useState<boolean | null>(null),
+    [syncStatus, setSyncStatus] = useState<Key>('text129'),
     [tie, setTie] = useState<{
       percentages: Scores;
     } | null>(null),
     [primary, setPrimary] = useState<Scale | ''>(''),
     [secondary, setSecondary] = useState<Scale | ''>('');
   const saveChain = useRef<Promise<unknown>>(Promise.resolve()),
-    revision = useRef(0);
-  const count = Object.keys(answers).length,
-    q = c.questions[index];
-  function sync(snapshot: Record<string, number>, id: string) {
+    revision = useRef(0),
+    answersRef = useRef(draft?.answers ?? {});
+  const q = c.questions[index];
+  const written = c.responseFormat === 'written';
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    void api('/test/analysis-status')
+      .then((data) => {
+        if (active.current) setAnalysisAvailable(data.available);
+      })
+      .catch(() => {});
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (draft?.session.analysis?.status === 'running') void submit(true);
+  }, []);
+  function sync(snapshot: Record<string, string | number>, id: string) {
     const rev = ++revision.current;
-    setSyncStatus(t('text130'));
+    setSyncStatus('text130');
     saveChain.current = saveChain.current
       .catch(() => {})
       .then(() => api(`/test/sessions/${id}/answers`, 'PUT', { answers: snapshot }))
       .then(() => {
-        if (rev === revision.current) setSyncStatus(t('text131'));
+        if (rev === revision.current) setSyncStatus('text131');
       })
       .catch(() => {
-        if (rev === revision.current) setSyncStatus(t('text132'));
+        if (rev === revision.current) setSyncStatus('text132');
       });
     return saveChain.current;
   }
@@ -84,13 +98,20 @@ export default function TestFlow({
     }
   }, [session, answers, index]);
   useEffect(() => {
-    if (session && !offline) void sync(answers, session.id);
-  }, [offline, session?.id]);
-  function answer(value: number) {
-    const next = { ...answers, [q.id]: value };
+    if (!session || session.analysis?.status === 'running') return;
+    if (offline) {
+      setSyncStatus('text134');
+      return;
+    }
+    const timer = setTimeout(() => void sync(answers, session.id), 600);
+    return () => clearTimeout(timer);
+  }, [offline, session?.id, answers]);
+  function answer(value: string | number) {
+    const next = { ...answersRef.current, [q.id]: value };
+    answersRef.current = next;
     setAnswers(next);
-    if (session && !offline) void sync(next, session.id);
-    else setSyncStatus(t('text134'));
+    setError('');
+    setSyncStatus(offline ? 'text134' : 'text130');
   }
   async function start() {
     setBusy(true);
@@ -98,6 +119,7 @@ export default function TestFlow({
     try {
       const s = await api<Session>('/test/sessions', 'POST', { appearance, consent: true });
       setSession(s);
+      answersRef.current = s.answers;
       setAnswers(s.answers);
       setStage(4);
     } catch (e) {
@@ -106,18 +128,31 @@ export default function TestFlow({
       setBusy(false);
     }
   }
-  async function submit() {
+  async function submit(resuming = false) {
     if (!session) return;
     setBusy(true);
     setError('');
     try {
       await saveChain.current;
-      await api(`/test/sessions/${session.id}/answers`, 'PUT', { answers });
-      await api(`/test/sessions/${session.id}/submit`, 'POST', {
-        ...(primary ? { primary } : {}),
-        ...(secondary ? { secondary } : {}),
-      });
-      onDone();
+      const latestAnswers = answersRef.current;
+      if (!resuming)
+        await api(`/test/sessions/${session.id}/answers`, 'PUT', { answers: latestAnswers });
+      const deadline = Date.now() + 120000;
+      let first = true;
+      while (active.current) {
+        const result = await api(`/test/sessions/${session.id}/submit`, 'POST', {
+          ...(primary ? { primary } : {}),
+          ...(secondary ? { secondary } : {}),
+          ...(first ? { retryAnalysis: true } : {}),
+        });
+        first = false;
+        if (result.status !== 'analyzing') {
+          onDone();
+          break;
+        }
+        if (Date.now() > deadline) throw new Error(t('written.timeout'));
+        await new Promise((resolve) => setTimeout(resolve, 1800));
+      }
     } catch (e) {
       if (e instanceof HttpError && e.data.code === 'AVATAR_CHOICE_REQUIRED') {
         const scores = e.data.percentages as Scores;
@@ -125,25 +160,32 @@ export default function TestFlow({
         const options = choices(scores);
         setPrimary(options.primaryOptions.length === 1 ? options.primaryOptions[0] : '');
         setSecondary('');
-      } else setError(e instanceof Error ? e.message : t('text135'));
+      } else {
+        setError(e instanceof Error ? e.message : t('text135'));
+        if (e instanceof HttpError && e.data.questionIds?.length) {
+          setIndex(
+            Math.max(
+              0,
+              c.questions.findIndex((q) => q.id === e.data.questionIds[0]),
+            ),
+          );
+          setError(`${e.message}: ${e.data.questionIds.join(', ')}`);
+        }
+      }
     } finally {
       setBusy(false);
     }
   }
-  const preview = buildAvatar({
-    ...appearance,
-    archetype: 'strategist',
-    accessory: 'confidence',
-    boosted: false,
-  }).fallbackSvg;
   const tieOptions = tie ? choices(tie.percentages, primary || undefined) : null;
   return (
-    <div className="flow">
+    <div className="flow" aria-busy={busy}>
       <div className="flow-top">
-        <button className="text-button" onClick={onExit}>
+        <button className="text-button" disabled={busy} onClick={onExit}>
           {t('text136')}
         </button>
-        <span className="flow-progress-text">{stage < 4 ? t('text138') : t('text139')}</span>
+        <span className="flow-progress-text">
+          {busy && written ? t('written.analyzing') : stage < 4 ? t('text138') : t('text139')}
+        </span>
       </div>
       {error && (
         <div role="alert" className="alert">
@@ -157,8 +199,8 @@ export default function TestFlow({
           <p>{t('text146')}</p>
           <details className="consent-details">
             <summary>{t('processingTerms')}</summary>
-            <p>{ui.methodology}</p>
-            <p>{ui.consent}</p>
+            <p>{ui().methodology}</p>
+            <p>{ui().consent}</p>
             <p>
               {t('text147')}
               {c.consentVersion}
@@ -171,7 +213,7 @@ export default function TestFlow({
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            <span>{ui.consentSummary}</span>
+            <span>{ui().consentSummary}</span>
           </label>
           <button className="button primary" disabled={!consent} onClick={() => setStage(1)}>
             {t('text149')}
@@ -181,14 +223,6 @@ export default function TestFlow({
         <section className="appearance panel">
           <div className="appearance-count">{String(stage).padStart(2, '0')} / 03</div>
           <h1>{stage === 1 ? t('text150') : stage === 2 ? t('text151') : t('text152')}</h1>
-          {stage > 1 && (
-            <div className="appearance-preview">
-              <img
-                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview)}`}
-                alt="Предпросмотр персонажа"
-              />
-            </div>
-          )}
           {stage === 1 ? (
             <div className="option-grid universe-grid">
               {universes.map((u) => (
@@ -200,12 +234,7 @@ export default function TestFlow({
                     setAppearance({ ...appearance, universe: u.id as Appearance['universe'] })
                   }
                 >
-                  <img
-                    className="universe-preview"
-                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildAvatar({ ...avatarCatalog.find((a) => a.universe === u.id)!.config, boosted: false }).fallbackSvg)}`}
-                    alt=""
-                  />
-                  <h3>{u.title}</h3>
+                  <h3>{t(u.title)}</h3>
                 </button>
               ))}
             </div>
@@ -288,7 +317,7 @@ export default function TestFlow({
               <option value="">{t('text170')}</option>
               {tieOptions!.primaryOptions.map((s) => (
                 <option key={s} value={s}>
-                  {c.scales[s].label} · {tie.percentages[s]}%
+                  {scaleLabel(c.scales, s)} · {tie.percentages[s]}%
                 </option>
               ))}
             </select>
@@ -304,7 +333,7 @@ export default function TestFlow({
               <option value="">{t('text173')}</option>
               {tieOptions!.secondaryOptions.map((s) => (
                 <option key={s} value={s}>
-                  {c.scales[s].label} · {tie.percentages[s]}%
+                  {scaleLabel(c.scales, s)} · {tie.percentages[s]}%
                 </option>
               ))}
             </select>
@@ -325,42 +354,73 @@ export default function TestFlow({
               {String(index + 1).padStart(2, '0')} / 15
             </span>
             <span className="sync-status" role="status">
-              {syncStatus}
+              {t(syncStatus)}
             </span>
           </div>
           <div className="question-progress">
-            <span style={{ width: `${(count / 15) * 100}%` }} />
+            <span style={{ width: `${((index + 1) / c.questions.length) * 100}%` }} />
           </div>
           <div className="question-area">
-            <h1 key={q.id}>{q.text}</h1>
+            <h1 key={q.id}>{questionText(q)}</h1>
           </div>
-          <div className="likert" role="radiogroup" aria-label={t('text178')}>
-            {[1, 2, 3, 4, 5, 6, 7].map((v) => (
-              <button
-                role="radio"
-                aria-checked={answers[q.id] === v}
-                aria-label={`${v} — ${v === 1 ? t('text179') : v === 7 ? t('text180') : v === 4 ? t('text181') : v < 4 ? t('text182') : t('text183')}`}
-                key={v}
-                className={`likert-point point-${v} ${answers[q.id] === v ? 'checked' : ''}`}
-                onClick={() => answer(v)}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <div className="likert-labels">
-            <span>
-              {t('text184')}
-              <br />
-              {t('text185')}
-            </span>
-            <span>{t('text186')}</span>
-            <span>
-              {t('text187')}
-              <br />
-              {t('text188')}
-            </span>
-          </div>
+          {written ? (
+            <div className="written-answer">
+              <label htmlFor="written-answer">{t('written.label')}</label>
+              <textarea
+                id="written-answer"
+                key={q.id}
+                value={typeof answers[q.id] === 'string' ? String(answers[q.id]) : ''}
+                onChange={(e) => answer(e.target.value)}
+                placeholder={t('written.placeholder')}
+                maxLength={MAX_ANSWER_LENGTH}
+                rows={7}
+                disabled={busy}
+                aria-describedby="answer-hint answer-length"
+              />
+              <div className="written-answer-meta">
+                <span id="answer-hint">{t('written.hint')}</span>
+                <span id="answer-length">
+                  {String(answers[q.id] ?? '').length} / {MAX_ANSWER_LENGTH}
+                </span>
+              </div>
+              {analysisAvailable === false && <p className="muted">{t('written.unavailable')}</p>}
+            </div>
+          ) : (
+            <>
+              <div className="likert" role="radiogroup" aria-label={t('text178')}>
+                {[1, 2, 3, 4, 5, 6, 7].map((v) => (
+                  <button
+                    role="radio"
+                    aria-checked={answers[q.id] === v}
+                    aria-label={`${v} — ${v === 1 ? t('text179') : v === 7 ? t('text180') : v === 4 ? t('text181') : v < 4 ? t('text182') : t('text183')}`}
+                    key={v}
+                    className={`likert-point point-${v} ${answers[q.id] === v ? 'checked' : ''}`}
+                    onClick={() => answer(v)}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <div className="likert-labels">
+                <span>
+                  {t('text184')}
+                  <br />
+                  {t('text185')}
+                </span>
+                <span>{t('text186')}</span>
+                <span>
+                  {t('text187')}
+                  <br />
+                  {t('text188')}
+                </span>
+              </div>
+            </>
+          )}
+          {busy && written && (
+            <p className="analysis-progress" role="status">
+              {t('written.analyzing')}
+            </p>
+          )}
           <div className="flow-buttons">
             <button
               className="button secondary"
@@ -372,10 +432,24 @@ export default function TestFlow({
 
             <button
               className="button primary"
-              disabled={!answers[q.id] || busy || (index === 14 && offline)}
+              disabled={
+                (written
+                  ? String(answers[q.id] ?? '').trim().length < MIN_ANSWER_LENGTH
+                  : !answers[q.id]) ||
+                busy ||
+                (index === 14 && offline)
+              }
               onClick={() => (index === 14 ? void submit() : setIndex(index + 1))}
             >
-              {busy ? t('text191') : index === 14 ? t('text192') : t('text193')}
+              {busy
+                ? written
+                  ? t('written.analyzing')
+                  : t('text191')
+                : index === 14
+                  ? written
+                    ? t('written.submit')
+                    : t('text192')
+                  : t('text193')}
             </button>
           </div>
         </section>

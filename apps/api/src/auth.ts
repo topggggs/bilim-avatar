@@ -50,7 +50,7 @@ export function auth(
       if (payload.kind === 'local' && (!account || account.sessionVersion !== payload.sv))
         throw Error('Session revoked');
       if (!req.user) {
-        res.status(401).json({ error: 'Нет доступа к Bilim' });
+        res.status(401).json({ error: 'Нет доступа к BI Group' });
         return;
       }
       next();
@@ -212,7 +212,9 @@ export function auth(
       const s = await store.read(),
         user = s.users.find((u) => u.sub === verified.payload.sub);
       if (!user) {
-        res.status(403).send('Учётная запись не подключена к Bilim. Обратитесь к администратору.');
+        res
+          .status(403)
+          .send('Учётная запись не подключена к BI Group. Обратитесь к администратору.');
         return;
       }
       res

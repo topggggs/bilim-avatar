@@ -35,6 +35,36 @@ async function register(email = 'worker@example.test') {
   return { a, token, email };
 }
 describe('регистрация и доступ', () => {
+  it('разрешает Vite loopback host alias только в демо-режиме', async () => {
+    await request(app)
+      .post('/api/auth/register/request')
+      .set('Origin', 'http://127.0.0.1:5173')
+      .send({ email: 'loopback@example.test' })
+      .expect(200);
+    await request(app)
+      .post('/api/auth/register/request')
+      .set('Origin', 'http://localhost:3001')
+      .send({ email: 'api-origin@example.test' })
+      .expect(200);
+
+    const production = createApp(store, { demo: false, origin });
+    await request(production)
+      .post('/api/auth/login')
+      .set('Origin', 'http://127.0.0.1:5173')
+      .send({})
+      .expect(403);
+  });
+  it('local-регистрация при npm run dev принимает 127.0.0.1 вместо localhost', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const mail = vi.fn(async () => {});
+    const dev = createApp(store, { demo: false, localAuth: true, origin, sendAuthMail: mail });
+    await request(dev)
+      .post('/api/auth/register/request')
+      .set('Origin', 'http://127.0.0.1:5173')
+      .send({ email: 'loopback@example.test' })
+      .expect(200);
+    expect(mail).toHaveBeenCalledOnce();
+  });
   it('подтверждение почты, нормализация, фиксированная роль, секреты отдельно от пользователя', async () => {
     const a = agent();
     const r = await post(a, '/register/request', { email: ' Worker@Example.Test ' }).expect(200);
@@ -315,6 +345,45 @@ describe('доставка и production', () => {
     app = createApp(store, { demo: false, localAuth: true, origin });
     await post(agent(), '/register/request', { email: 'test@example.test' }).expect(503);
   });
+  it('Gmail без пароля приложения не выдаёт фиктивную ссылку подтверждения', async () => {
+    vi.stubEnv('SMTP_HOST', 'smtp.gmail.com');
+    vi.stubEnv('SMTP_USER', 'sender@gmail.com');
+    vi.stubEnv('SMTP_PASSWORD', '');
+    vi.stubEnv('SMTP_FROM', 'sender@gmail.com');
+    app = createApp(store, { demo: false, localAuth: true, origin });
+    const response = await post(agent(), '/register/request', {
+      email: 'person@gmail.test',
+    }).expect(503);
+    expect(response.body.error).toContain('SMTP_PASSWORD');
+    expect(response.body.previewLink).toBeUndefined();
+    expect((await store.read()).authTokens).toHaveLength(0);
+  });
+  it('Gmail: пробелы пароля приложения убираются, отказ входа объясняется', async () => {
+    vi.stubEnv('SMTP_HOST', 'smtp.gmail.com');
+    vi.stubEnv('SMTP_USER', 'sender@gmail.com');
+    vi.stubEnv('SMTP_PASSWORD', 'abcd efgh ijkl mnop');
+    const rejected = Object.assign(Error('Invalid login: 535-5.7.8 Username and Password'), {
+      code: 'EAUTH',
+      responseCode: 535,
+    });
+    const create = vi.spyOn(nodemailer, 'createTransport').mockReturnValue({
+      sendMail: async () => {
+        throw rejected;
+      },
+    } as any);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    app = createApp(store, { demo: false, localAuth: true, origin });
+    const response = await post(agent(), '/register/request', {
+      email: 'person@gmail.test',
+    }).expect(503);
+    expect((create.mock.calls[0][0] as any).auth).toEqual({
+      user: 'sender@gmail.com',
+      pass: 'abcdefghijklmnop',
+    });
+    expect(response.body.error).toContain('пароль приложения');
+    expect(log.mock.calls[0].join(' ')).toContain('SMTP_PASSWORD');
+    expect((await store.read()).authTokens).toHaveLength(0);
+  });
   it('demo не вызывает настоящего SMS провайдера даже при наличии ключей', async () => {
     vi.stubEnv('TWILIO_ACCOUNT_SID', 'ACtest');
     vi.stubEnv('TWILIO_AUTH_TOKEN', 'test-secret');
@@ -343,8 +412,51 @@ describe('доставка и production', () => {
     });
     expect(sendMail.mock.calls[0][0]).toMatchObject({
       to: 'test@example.test',
-      subject: 'Bilim — подтверждение почты',
+      subject: 'BI Group — подтверждение почты',
     });
+  });
+  it('зарегистрированный сотрудник начинает тест, даже если методика в статусе черновика', async () => {
+    const links: string[] = [];
+    app = createApp(store, {
+      demo: false,
+      localAuth: true,
+      origin,
+      sendAuthMail: async ({ link }) => void links.push(link),
+    });
+    expect((await store.read()).versions[0].contentStatus).toBe('draft');
+    const a = agent();
+    await post(a, '/register/request', { email: 'draft@example.test' }).expect(200);
+    const created = await post(a, '/register/complete', {
+      token: linkToken(links[0]),
+      name: 'Новый Сотрудник',
+      password,
+      consent: true,
+    }).expect(201);
+    // Production cookies are Secure; supertest speaks plain HTTP, so pass the session explicitly.
+    await request(app)
+      .post('/api/test/sessions')
+      .set('Origin', origin)
+      .set('Cookie', created.headers['set-cookie'][0].split(';')[0])
+      .send({
+        appearance: { universe: 'animals', gender: 'neutral', style: 'tech' },
+        consent: true,
+      })
+      .expect(201);
+  });
+  it('письмо приходит на языке интерфейса из Accept-Language', async () => {
+    const mail = vi.fn(async (_mail: unknown) => {});
+    app = createApp(store, { demo: false, localAuth: true, origin, sendAuthMail: mail });
+    await post(agent(), '/register/request', { email: 'kk@example.test' })
+      .set('Accept-Language', 'kk')
+      .expect(200);
+    await post(agent(), '/register/request', { email: 'browser@example.test' })
+      .set('Accept-Language', 'de-DE,de;q=0.9')
+      .expect(200);
+    expect(mail.mock.calls.map(([m]) => (m as { lang: string }).lang)).toEqual(['kk', 'ru']);
+    const sendMail = vi.fn(async (_message: unknown) => ({}));
+    vi.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail } as any);
+    await smtpMailer()({ to: 'a@example.test', kind: 'reset', link: 'x', lang: 'en' });
+    expect(sendMail.mock.calls[0][0]).toMatchObject({ subject: 'BI Group — reset your password' });
   });
   it('SMS провайдер получает E.164 и код; ошибки API не раскрывают ключи', async () => {
     vi.stubEnv('TWILIO_ACCOUNT_SID', 'ACtest');

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from './api';
+import { rankName, recText, recTitle } from './content';
 import { t } from './localization';
 import type { Portrait } from './shared';
 
@@ -38,7 +39,7 @@ export default function RankCard({
       <div className="rank-heading">
         <div>
           <span className="card-category">{t('rank.label')}</span>
-          <h2>{rank.current.name}</h2>
+          <h2>{rankName(rank.current)}</h2>
         </div>
         <span className="rank-count">{t('rank.completed', { count: rank.completed })}</span>
       </div>
@@ -49,20 +50,20 @@ export default function RankCard({
             className={rank.points >= r.points ? 'reached' : ''}
             aria-current={rank.current.id === r.id ? 'step' : undefined}
           >
-            {r.name}
+            {rankName(r)}
           </li>
         ))}
       </ol>
       {rank.next ? (
         <>
           <div className="rank-progress-label">
-            <span>{t('rank.next', { name: rank.next.name })}</span>
+            <span>{t('rank.next', { name: rankName(rank.next) })}</span>
             <span>
               {p.result ? rank.completed : 0} / {p.result ? rank.next.points - 1 : 1}
             </span>
           </div>
           <progress
-            aria-label={t('rank.next', { name: rank.next.name })}
+            aria-label={t('rank.next', { name: rankName(rank.next) })}
             value={rank.progress}
             max={100}
           />
@@ -86,7 +87,7 @@ export default function RankCard({
               return (
                 <article key={task.id} className="rank-task">
                   <div className="rank-task-heading">
-                    <h3>{task.title}</h3>
+                    <h3>{recTitle(task)}</h3>
                     {record && (
                       <span className={`rank-status ${record.status}`}>
                         {t(`rank.${record.status}`)}
@@ -95,7 +96,7 @@ export default function RankCard({
                   </div>
                   <details className="explanation">
                     <summary>{t('details')}</summary>
-                    <p>{task.text}</p>
+                    <p>{recText(task)}</p>
                     <p>
                       {task.durationDays}
                       {t('text097')}
@@ -161,7 +162,7 @@ export default function RankCard({
             .map((record) => (
               <article className="rank-task" key={record.id}>
                 <span className="card-category">{t('rank.pending')}</span>
-                <h3>{record.title}</h3>
+                <h3>{recTitle({ id: record.recommendationId, title: record.title })}</h3>
                 <p className="rank-evidence">{record.evidence}</p>
                 <div className="rank-actions">
                   <button
