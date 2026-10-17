@@ -121,7 +121,8 @@ export function createAnalyzer(
               maxOutputTokens: 10000,
               responseFormat: {
                 text: {
-                  mimeType: 'application/json',
+                  // generateContent REST uses an enum here, unlike the MIME string in responseMimeType.
+                  mimeType: 'APPLICATION_JSON',
                   schema: geminiJsonSchema(z.toJSONSchema(analysisSchema)),
                 },
               },

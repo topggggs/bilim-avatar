@@ -44,7 +44,7 @@ it('Gemini: ключ передаётся заголовком, запрос б�
   expect(options.headers).toMatchObject({ 'x-goog-api-key': 'gemini-test-secret' });
   expect(options.redirect).toBe('error');
   const body = JSON.parse(options.body as string);
-  expect(body.generationConfig.responseFormat.text.mimeType).toBe('application/json');
+  expect(body.generationConfig.responseFormat.text.mimeType).toBe('APPLICATION_JSON');
   expect(body.generationConfig.responseFormat.text.schema.properties.ratings.minItems).toBe(16);
   expect(JSON.stringify(body.generationConfig.responseFormat.text.schema)).not.toContain(
     'minLength',
