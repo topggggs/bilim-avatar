@@ -46,6 +46,8 @@ export default function TestFlow({
     [index, setIndex] = useState(draft?.index ?? 0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
+    [analysisProvider, setAnalysisProvider] = useState<'gemini' | 'openai' | ''>(''),
+    [analysisProviderName, setAnalysisProviderName] = useState(''),
     [analysisAvailable, setAnalysisAvailable] = useState<boolean | null>(null),
     [syncStatus, setSyncStatus] = useState<Key>('text129'),
     [tie, setTie] = useState<{
@@ -59,13 +61,43 @@ export default function TestFlow({
   const q = c.questions[index];
   const written = c.responseFormat === 'written';
   const active = useRef(true);
+  const consentText = (text: string) => text.replace('{{provider}}', analysisProviderName || '…');
+  const needsProviderConsent =
+    written &&
+    session &&
+    analysisProvider &&
+    !session.analysis?.report &&
+    session.analysisProvider !== analysisProvider;
+  async function confirmAnalysisConsent() {
+    if (!session || !analysisProvider) return;
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await api<Session>(`/test/sessions/${session.id}/analysis-consent`, 'PUT', {
+        consent: true,
+        provider: analysisProvider,
+      });
+      setSession(updated);
+      setConsent(false);
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     active.current = true;
     void api('/test/analysis-status')
       .then((data) => {
-        if (active.current) setAnalysisAvailable(data.available);
+        if (active.current) {
+          setAnalysisAvailable(data.available);
+          setAnalysisProvider(data.provider);
+          setAnalysisProviderName(data.providerLabel);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active.current) setError(t('api.offline'));
+      });
     return () => {
       active.current = false;
     };
@@ -117,7 +149,11 @@ export default function TestFlow({
     setBusy(true);
     setError('');
     try {
-      const s = await api<Session>('/test/sessions', 'POST', { appearance, consent: true });
+      const s = await api<Session>('/test/sessions', 'POST', {
+        appearance,
+        consent: true,
+        ...(written ? { analysisProvider } : {}),
+      });
       setSession(s);
       answersRef.current = s.answers;
       setAnswers(s.answers);
@@ -154,7 +190,21 @@ export default function TestFlow({
         await new Promise((resolve) => setTimeout(resolve, 1800));
       }
     } catch (e) {
-      if (e instanceof HttpError && e.data.code === 'AVATAR_CHOICE_REQUIRED') {
+      if (e instanceof HttpError && e.data.code === 'ANALYSIS_CONSENT_REQUIRED') {
+        try {
+          const [status, current] = await Promise.all([
+            api('/test/analysis-status'),
+            api<Session>('/test/sessions/current'),
+          ]);
+          setAnalysisProvider(status.provider);
+          setAnalysisProviderName(status.providerLabel);
+          setAnalysisAvailable(status.available);
+          setSession(current);
+          setConsent(false);
+        } catch (error) {
+          setError((error as Error).message);
+        }
+      } else if (e instanceof HttpError && e.data.code === 'AVATAR_CHOICE_REQUIRED') {
         const scores = e.data.percentages as Scores;
         setTie({ percentages: scores });
         const options = choices(scores);
@@ -200,7 +250,7 @@ export default function TestFlow({
           <details className="consent-details">
             <summary>{t('processingTerms')}</summary>
             <p>{ui().methodology}</p>
-            <p>{ui().consent}</p>
+            <p>{consentText(ui().consent)}</p>
             <p>
               {t('text147')}
               {c.consentVersion}
@@ -213,9 +263,13 @@ export default function TestFlow({
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            <span>{ui().consentSummary}</span>
+            <span>{consentText(ui().consentSummary)}</span>
           </label>
-          <button className="button primary" disabled={!consent} onClick={() => setStage(1)}>
+          <button
+            className="button primary"
+            disabled={!consent || (written && !analysisProvider)}
+            onClick={() => setStage(1)}
+          >
             {t('text149')}
           </button>
         </section>
@@ -299,6 +353,26 @@ export default function TestFlow({
               {stage === 3 ? t('text164') : t('text165')}
             </button>
           </div>
+        </section>
+      ) : needsProviderConsent ? (
+        <section className="onboarding panel">
+          <h1>{t('written.consentTitle')}</h1>
+          <p>{consentText(ui().consent)}</p>
+          <label className="consent">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+            />
+            <span>{consentText(ui().consentSummary)}</span>
+          </label>
+          <button
+            className="button primary"
+            disabled={!consent || busy}
+            onClick={() => void confirmAnalysisConsent()}
+          >
+            {t('text165')}
+          </button>
         </section>
       ) : tie ? (
         <section className="panel tie-panel">

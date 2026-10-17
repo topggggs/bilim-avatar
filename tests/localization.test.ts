@@ -25,7 +25,10 @@ describe('переводы интерфейса', () => {
       expect(Object.keys(dictionary)).toEqual(Object.keys(ru));
       for (const [key, text] of Object.entries(ru))
         expect(placeholders(dictionary[key as keyof typeof ru]), key).toEqual(placeholders(text));
-      expect(Object.keys(name === 'en' ? uiEn : uiKk)).toEqual(Object.keys(uiRu));
+      const ui = name === 'en' ? uiEn : uiKk;
+      expect(Object.keys(ui)).toEqual(Object.keys(uiRu));
+      expect(placeholders(ui.consent)).toEqual(['provider']);
+      expect(placeholders(ui.consentSummary)).toEqual(['provider']);
     });
   it('контент теста переведён для всех шкал, вопросов и рекомендаций', () => {
     for (const translation of [testEn, testKk]) {

@@ -118,6 +118,8 @@ it.skipIf(!process.env.TEST_DATABASE_URL)(
         completedAt: new Date().toISOString(),
         consentAt: new Date().toISOString(),
         consentVersion: config.consentVersion,
+        analysisProvider: 'gemini',
+        analysisConsentAt: new Date().toISOString(),
         analysis: {
           status: 'ready',
           runId: 'analysis-run',
@@ -131,6 +133,8 @@ it.skipIf(!process.env.TEST_DATABASE_URL)(
     const final = new PostgresStore(url);
     const saved = (await final.read()).sessions.find((s) => s.id === 'written-session')!;
     expect(saved.answers['1']).toBe(writtenAnswer);
+    expect(saved.analysisProvider).toBe('gemini');
+    expect(saved.analysisConsentAt).toBeTruthy();
     expect(saved.analysis?.report?.rubricVersion).toBe('written-v1');
     expect(saved.result?.percentages.critical).toBe(50);
     await final.close();

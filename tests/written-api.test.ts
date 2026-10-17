@@ -26,6 +26,7 @@ async function setup(analyze?: NonNullable<Parameters<typeof createApp>[1]>['ana
       .send({
         appearance: { universe: 'animals', gender: 'neutral', style: 'tech' },
         consent: true,
+        analysisProvider: 'gemini',
       })
       .expect(201)
   ).body;
@@ -96,7 +97,11 @@ it('один вызов ИИ при параллельной отправке; �
   await f.owner
     .post('/api/test/sessions')
     .set('Origin', origin)
-    .send({ appearance: { universe: 'animals', gender: 'neutral', style: 'tech' }, consent: true })
+    .send({
+      appearance: { universe: 'animals', gender: 'neutral', style: 'tech' },
+      consent: true,
+      analysisProvider: 'gemini',
+    })
     .expect(409);
 });
 it('ошибка ИИ требует явного повтора; изменение ответа сбрасывает кэш', async () => {
@@ -185,4 +190,54 @@ it('новая версия сохраняет старую историю и а
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+it('смена провайдера требует нового согласия перед отправкой ответов', async () => {
+  const analyze = vi.fn(async () => reportFor(c));
+  const f = await setup(analyze);
+  await f.save();
+  await store.tx((s) => {
+    const session = s.sessions.find((s) => s.id === f.session.id)!;
+    session.analysisProvider = 'openai';
+    delete session.analysisConsentAt;
+  });
+  const response = await f.submit().expect(409);
+  expect(response.body.code).toBe('ANALYSIS_CONSENT_REQUIRED');
+  expect(analyze).not.toHaveBeenCalled();
+  const path = `/api/test/sessions/${f.session.id}/analysis-consent`;
+  await f.owner
+    .put(path)
+    .set('Origin', origin)
+    .send({ consent: false, provider: 'gemini' })
+    .expect(400);
+  await f.owner
+    .put(path)
+    .set('Origin', origin)
+    .send({ consent: true, provider: 'openai' })
+    .expect(409);
+  const manager = request.agent(f.app);
+  await manager.post('/api/auth/demo').set('Origin', origin).send({ userId: 'manager' });
+  await manager
+    .put(path)
+    .set('Origin', origin)
+    .send({ consent: true, provider: 'gemini' })
+    .expect(404);
+  const updated = (
+    await f.owner
+      .put(path)
+      .set('Origin', origin)
+      .send({ consent: true, provider: 'gemini' })
+      .expect(200)
+  ).body;
+  expect(updated.analysisProvider).toBe('gemini');
+  expect(updated.analysisConsentAt).toBeTruthy();
+  expect(updated.answers).toEqual(f.answers);
+  const status = (await f.owner.get('/api/test/analysis-status')).body;
+  expect(status).toMatchObject({
+    provider: 'gemini',
+    providerLabel: 'Gemini (Google)',
+    available: true,
+  });
+  expect(JSON.stringify(status)).not.toContain('apiKey');
+  await f.submit().expect(202);
+  expect(analyze).toHaveBeenCalledTimes(1);
 });

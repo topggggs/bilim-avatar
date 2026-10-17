@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import seed from '../../../config/test.ru.json';
 import legacy from '../../../config/test.legacy.ru.json';
+import type { AnalysisProvider } from './analysis.js';
 import type { WrittenAnswers, AnalysisReport } from '../../../packages/core/src/written.js';
 import {
   configSchema,
@@ -43,6 +44,8 @@ export type Session = {
   completedAt?: string;
   consentAt: string;
   consentVersion: string;
+  analysisProvider?: AnalysisProvider;
+  analysisConsentAt?: string;
   status: 'in_progress' | 'completed' | 'superseded';
   result?: Result;
 };

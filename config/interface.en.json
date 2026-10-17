@@ -439,5 +439,6 @@
   "written.timeout": "Analysis is still running. Your answers are saved — continue later.",
   "written.review": "Answer analysis",
   "written.myAnswers": "My answers",
-  "written.limits": "Percentages reflect the actions you described, not an objective measure of personality."
+  "written.limits": "Percentages reflect the actions you described, not an objective measure of personality.",
+  "written.consentTitle": "The analysis provider has changed"
 }

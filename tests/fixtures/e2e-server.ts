@@ -11,16 +11,16 @@ import { reportFor } from './written';
 const store = await createStore();
 const c = configSchema.parse(raw);
 const analyze = createAnalyzer({
+  provider: 'gemini',
   apiKey: 'e2e-fixture',
   request: (async () => {
     const { model, analyzedAt, rubricVersion, ...report } = reportFor(c);
     report.ratings[0].value = 1;
     await new Promise((resolve) => setTimeout(resolve, 700));
     return Response.json({
-      status: 'completed',
-      model: 'e2e-fixture',
-      output: [
-        { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(report) }] },
+      modelVersion: 'e2e-fixture',
+      candidates: [
+        { finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(report) }] } },
       ],
     });
   }) as typeof fetch,

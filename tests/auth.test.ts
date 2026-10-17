@@ -440,6 +440,7 @@ describe('доставка и production', () => {
       .send({
         appearance: { universe: 'animals', gender: 'neutral', style: 'tech' },
         consent: true,
+        analysisProvider: 'gemini',
       })
       .expect(201);
   });

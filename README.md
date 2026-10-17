@@ -96,7 +96,7 @@ npm run db:user -- '<OIDC subject>' admin 'Имя администратора'
 
 ## ИИ и учебные порталы
 
-Для анализа письменных ответов задайте `OPENAI_API_KEY` и `ANALYSIS_MODEL` на сервере и перезапустите API. В Responses API отправляются тексты вопросов и ответов без данных аккаунта; перед тестом запрашивается отдельное согласие. Подробности: [письменный тест](docs/written-assessment.md).
+Для анализа письменных ответов задайте `ANALYSIS_PROVIDER=gemini`, `GEMINI_API_KEY`, `GEMINI_MODEL` на сервере, выполните `npm run ai:check` и перезапустите API. Для OpenAI используйте `ANALYSIS_PROVIDER=openai`, `OPENAI_API_KEY` и `ANALYSIS_MODEL`. В выбранный сервис отправляются тексты вопросов и ответов без данных аккаунта; перед тестом запрашивается отдельное согласие. Подробности: [письменный тест](docs/written-assessment.md).
 
 Для настоящей генерации: `AVATAR_PROVIDER=openai`, `OPENAI_API_KEY`, `IMAGE_MODEL`, `VISION_MODEL`, работающие Redis, worker и приватный S3. Ключ остаётся на сервере. В Images API передаётся только промпт из перечислимой конфигурации; имя, фото и ответы не отправляются. Vision получает сгенерированное изображение и критерии проверки, `store:false`.
 

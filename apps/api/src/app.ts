@@ -1,4 +1,10 @@
-import { AnalysisUnavailableError, type AnalyzeAnswers } from './analysis.js';
+import {
+  AnalysisUnavailableError,
+  configuredAnalysisProvider,
+  analysisProviderLabel,
+  type AnalysisProvider,
+  type AnalyzeAnswers,
+} from './analysis.js';
 import {
   validateWrittenAnswers,
   writtenProfile,
@@ -74,6 +80,7 @@ export function createApp(
   store: Store,
   options: {
     analyze?: AnalyzeAnswers;
+    analysisProvider?: AnalysisProvider;
     demo: boolean;
     localAuth?: boolean;
     sendAuthMail?: SendAuthMail;
@@ -84,6 +91,8 @@ export function createApp(
   } = { demo: true, origin: 'http://localhost:5173' },
 ) {
   const app = express();
+  const analysisProvider =
+    options.analyze?.provider ?? options.analysisProvider ?? configuredAnalysisProvider();
   app.disable('x-powered-by');
   const configuredOrigin = new URL(options.origin);
   const allowedOrigins = new Set([configuredOrigin.origin]);
@@ -162,7 +171,13 @@ export function createApp(
       throw new ApiError(503, 'Учебный портал должен использовать HTTPS');
     res.json({ url: new URL(value, base).toString() });
   });
-  app.get('/api/test/analysis-status', (_req, res) => res.json({ available: !!options.analyze }));
+  app.get('/api/test/analysis-status', (_req, res) =>
+    res.json({
+      available: !!options.analyze,
+      provider: analysisProvider,
+      providerLabel: analysisProviderLabel(analysisProvider),
+    }),
+  );
   app.get('/api/test/config', async (_req, res) => {
     const s = await store.read();
     res.json(s.versions.find((x) => x.version === s.activeVersion));
@@ -179,7 +194,11 @@ export function createApp(
   app.post('/api/test/sessions', async (req, res) => {
     requireRole(req.user!, ['employee', 'manager']);
     const body = z
-      .object({ appearance: appearanceSchema, consent: z.literal(true) })
+      .object({
+        appearance: appearanceSchema,
+        consent: z.literal(true),
+        analysisProvider: z.enum(['gemini', 'openai']).optional(),
+      })
       .strict()
       .parse(req.body);
     const session = await store.tx((s) => {
@@ -188,6 +207,10 @@ export function createApp(
       );
       if (current) return current;
       const config = s.versions.find((x) => x.version === s.activeVersion)!;
+      if (config.responseFormat === 'written' && body.analysisProvider !== analysisProvider)
+        throw new ApiError(409, 'Подтвердите согласие на анализ ответов выбранным сервисом', {
+          code: 'ANALYSIS_CONSENT_REQUIRED',
+        });
       const previous = latest(s, req.user!.id);
       if (previous) {
         const nextAt = new Date(
@@ -210,6 +233,9 @@ export function createApp(
         startedAt: now,
         consentAt: now,
         consentVersion: config.consentVersion,
+        ...(config.responseFormat === 'written'
+          ? { analysisProvider, analysisConsentAt: now }
+          : {}),
         status: 'in_progress',
       };
       s.sessions.push(session);
@@ -217,6 +243,29 @@ export function createApp(
       return session;
     });
     res.status(201).json(session);
+  });
+  app.put('/api/test/sessions/:id/analysis-consent', async (req, res) => {
+    const body = z
+      .object({ consent: z.literal(true), provider: z.enum(['gemini', 'openai']) })
+      .strict()
+      .parse(req.body);
+    if (body.provider !== analysisProvider)
+      throw new ApiError(409, 'Сервис анализа изменился. Обновите страницу.');
+    const session = await store.tx((s) => {
+      const session = ownedSession(s, String(req.params.id), req.user!);
+      if (session.status !== 'in_progress') throw new ApiError(409, 'Тест уже завершён');
+      if (
+        session.analysis?.status === 'running' &&
+        Date.now() - Date.parse(session.analysis.startedAt) < 90000
+      )
+        throw new ApiError(409, 'Дождитесь окончания анализа');
+      session.analysisProvider = analysisProvider;
+      session.analysisConsentAt = new Date().toISOString();
+      if (session.analysis?.status !== 'ready') delete session.analysis;
+      audit(s, req.user!.id, 'test.analysis_consent', session.id);
+      return session;
+    });
+    res.json(session);
   });
   app.put('/api/test/sessions/:id/answers', async (req, res) => {
     const body = z
@@ -291,6 +340,10 @@ export function createApp(
       } catch (e) {
         throw new ApiError(400, (e as Error).message);
       }
+      if (session.analysisProvider !== analysisProvider)
+        throw new ApiError(409, 'Подтвердите согласие на анализ ответов выбранным сервисом', {
+          code: 'ANALYSIS_CONSENT_REQUIRED',
+        });
       if (!options.analyze)
         throw new ApiError(503, new AnalysisUnavailableError().message, {
           code: 'AI_NOT_CONFIGURED',
