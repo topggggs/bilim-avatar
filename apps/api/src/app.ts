@@ -229,11 +229,6 @@ export function createApp(
       const session = ownedSession(s, String(req.params.id), req.user!);
       if (session.status !== 'in_progress') throw new ApiError(409, 'Тест уже завершён');
       const c = s.versions.find((x) => x.version === session.version)!;
-      if (
-        session.analysis?.status === 'running' &&
-        Date.now() - Date.parse(session.analysis.startedAt) < 90000
-      )
-        throw new ApiError(409, 'Дождитесь окончания анализа');
       if (c.responseFormat === 'written') {
         try {
           validateWrittenAnswers(body.answers as WrittenAnswers, c, false);
@@ -244,6 +239,12 @@ export function createApp(
       const changed = Object.entries(body.answers).some(
         ([id, value]) => session.answers[id] !== value,
       );
+      if (
+        changed &&
+        session.analysis?.status === 'running' &&
+        Date.now() - Date.parse(session.analysis.startedAt) < 90000
+      )
+        throw new ApiError(409, 'Дождитесь окончания анализа');
       session.answers = { ...session.answers, ...body.answers } as typeof session.answers;
       if (changed) delete session.analysis;
       return session;

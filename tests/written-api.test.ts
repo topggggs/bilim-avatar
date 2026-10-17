@@ -60,6 +60,11 @@ it('один вызов ИИ при параллельной отправке; �
   await f.submit().expect(202);
   await f.submit().expect(202);
   expect(analyze).toHaveBeenCalledTimes(1);
+  // A delayed autosave of the submitted snapshot is idempotent during analysis.
+  await f.save().expect(200);
+  expect((await store.read()).sessions.find((s) => s.id === f.session.id)?.analysis?.status).toBe(
+    'running',
+  );
   await f.save({ '1': writtenAnswer + ' другой вариант' }).expect(409);
   release(reportFor(c));
   await vi.waitFor(async () =>
