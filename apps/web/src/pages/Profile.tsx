@@ -1,7 +1,20 @@
 import RankCard from '../RankCard';
 import AvatarEditor from '../AvatarEditor';
-import { Palette, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  BookOpen,
+  Check,
+  ClipboardList,
+  Clock,
+  Palette,
+  Target,
+  UserRound,
+  Wrench,
+  X,
+} from 'lucide-react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { scaleIds, type Scores, type TestConfig } from '../../../../packages/core/src/index';
 import { api } from '../api';
 import {
@@ -15,15 +28,7 @@ import {
   strongUse,
 } from '../content';
 import { t } from '../localization';
-import {
-  date,
-  Disclaimer,
-  levelLabel,
-  placeholder,
-  ui,
-  type AvatarView,
-  type Portrait,
-} from '../shared';
+import { date, levelLabel, placeholder, type AvatarView, type Portrait } from '../shared';
 export default function Profile({
   portrait: p,
   config,
@@ -120,9 +125,10 @@ export default function Profile({
     }
   }
   const canRetake = !p.nextAllowedAt || Date.parse(p.nextAllowedAt) <= Date.now();
+  const goal = config.thresholds.high;
   return (
-    <>
-      <div className="page-title">
+    <div className="profile-page">
+      <div className="page-title profile-page-title">
         <div>
           <h1>{readOnly ? p.user.name : t('text041')}</h1>
         </div>
@@ -187,7 +193,6 @@ export default function Profile({
                   onSaved={async (updated) => {
                     setEditing(false);
                     await loadAvatars().catch(() => undefined);
-                    // Keep the edited variant on screen even if it is not the fixed or newest one.
                     setAvatar(updated);
                   }}
                 />
@@ -236,37 +241,39 @@ export default function Profile({
               <div className="panel-top">
                 <h2>{t('text081')}</h2>
               </div>
-              <div className="score-list">
-                {scaleIds.map((s) => {
-                  return (
-                    <div className="score-row" key={s}>
-                      <div className="score-label">
-                        <span>{scaleLabel(p.scales, s)}</span>
-                        <b>
-                          {r.percentages[s]}
-                          <small>%</small>
-                        </b>
+              <div className="qualities-body">
+                <div className="score-list">
+                  {scaleIds.map((s) => {
+                    return (
+                      <div className="score-row" key={s}>
+                        <div className="score-label">
+                          <span>{scaleLabel(p.scales, s)}</span>
+                          <b>
+                            {r.percentages[s]}
+                            <small>%</small>
+                          </b>
+                        </div>
+                        <div
+                          className="score-track"
+                          role="meter"
+                          aria-label={scaleLabel(p.scales, s)}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={r.percentages[s]}
+                        >
+                          <span className={r.levels[s]} style={{ width: `${r.percentages[s]}%` }} />
+                        </div>
+                        <div className={`level-text ${r.levels[s]}`}>
+                          {levelLabel(r.levels[s])}
+                          {t('text084')}
+                        </div>
                       </div>
-                      <div
-                        className="score-track"
-                        role="meter"
-                        aria-label={scaleLabel(p.scales, s)}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={r.percentages[s]}
-                      >
-                        <span className={r.levels[s]} style={{ width: `${r.percentages[s]}%` }} />
-                      </div>
-                      <div className={`level-text ${r.levels[s]}`}>
-                        {levelLabel(r.levels[s])}
-                        {t('text084')}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="profile-bottom">
-                <Radar scores={r.percentages} labels={p.scales} />
+                    );
+                  })}
+                </div>
+                <div className="profile-bottom">
+                  <Radar scores={r.percentages} labels={p.scales} />
+                </div>
               </div>
             </section>
           </div>
@@ -298,99 +305,117 @@ export default function Profile({
               <p className="muted">{t('written.limits')}</p>
             </section>
           )}
-          {p.answerStatistics && (
-            <section className="panel answer-statistics">
-              <div className="panel-top">
-                <div>
-                  <h2>{t('profile.answerStatistics')}</h2>
-                  <p className="muted">{t('profile.answerScale')}</p>
-                </div>
-                <strong className="answer-average">
-                  {p.answerStatistics.average}
-                  <small>/ 7</small>
-                </strong>
-              </div>
-              <div className="answer-distribution" aria-label={t('profile.answerDistribution')}>
-                {p.answerStatistics.distribution.map(({ value, count }) => (
-                  <div className="answer-bin" key={value}>
-                    <span>{value}</span>
-                    <div
-                      className="answer-bin-track"
-                      role="meter"
-                      aria-label={t('profile.ratingCount', { value })}
-                      aria-valuemin={0}
-                      aria-valuemax={p.answerStatistics!.count}
-                      aria-valuenow={count}
-                    >
-                      <span
-                        style={{
-                          height: `${(count / p.answerStatistics!.count) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <small>{count}</small>
-                  </div>
-                ))}
-              </div>
-              <details className="answer-details">
-                <summary>
-                  {t('profile.questionAnswers', { count: p.answerStatistics.count })}
-                </summary>
-                <ol>
-                  {p.answerStatistics.items.map((item, index) => (
-                    <li key={item.id}>
-                      <div className="answer-question-copy">
-                        <small>{t('profile.questionNumber', { number: index + 1 })}</small>
-                        <p>{questionText(item)}</p>
-                        <span>
-                          {item.scales.map((scale) => scaleLabel(p.scales, scale)).join(' · ')}
-                        </span>
-                      </div>
-                      <div className="answer-item-rating">
-                        <b>{item.answer}/7</b>
-                        <div className="answer-item-track" aria-hidden="true">
-                          <span style={{ width: `${(item.answer / 7) * 100}%` }} />
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            </section>
-          )}
-          {r.qualityFlags.length > 0 && (
-            <div className="quality-warning">
-              <p>{ui().qualityWarning}</p>
-            </div>
-          )}
           <div className="insights-grid">
-            <section className="panel insight">
+            <section className="panel insight insight-strengths">
               <div className="insight-title">
                 <h2>{t('text088')}</h2>
               </div>
-              {r.strong.map((s) => (
-                <details className="interpretation explanation" key={s}>
+              {r.strong.slice(0, 1).map((s) => (
+                <div className={`strength-feature ${r.levels[s]}`} key={s}>
+                  <div
+                    className="strength-donut"
+                    role="meter"
+                    aria-label={scaleLabel(p.scales, s)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={r.percentages[s]}
+                  >
+                    <svg viewBox="0 0 120 120" aria-hidden="true">
+                      <circle className="strength-ring-track" cx="60" cy="60" r="51" />
+                      <circle
+                        className="strength-ring"
+                        cx="60"
+                        cy="60"
+                        r="51"
+                        pathLength={100}
+                        strokeDasharray={`${r.percentages[s]} 100`}
+                        transform="rotate(-90 60 60)"
+                      />
+                    </svg>
+                    <span className="strength-value">
+                      {r.percentages[s]}
+                      <small>%</small>
+                    </span>
+                  </div>
+                  <div className="strength-copy">
+                    <h3>{scaleLabel(p.scales, s)}</h3>
+                    <span className={`level-text ${r.levels[s]}`}>
+                      {levelLabel(r.levels[s])}
+                      {t('text084')}
+                    </span>
+                    <p>{interpretation(p.scales, s, r.levels[s])}</p>
+                  </div>
+                </div>
+              ))}
+              {r.strong.slice(1).map((s) => (
+                <details className="strength-extra" key={s}>
                   <summary>
                     <span>{scaleLabel(p.scales, s)}</span>
-                    <span>{r.percentages[s]}%</span>
+                    <strong>{r.percentages[s]}%</strong>
+                    <span className="insight-track" aria-hidden="true">
+                      <span className={r.levels[s]} style={{ width: `${r.percentages[s]}%` }} />
+                    </span>
                   </summary>
                   <p>{interpretation(p.scales, s, r.levels[s])}</p>
                 </details>
               ))}
             </section>
-            <section className="panel insight">
+            <section className="panel insight insight-growth">
               <div className="insight-title">
                 <h2>{t('text089')}</h2>
               </div>
-              {r.growth.map((s) => (
-                <details className="interpretation explanation" key={s}>
-                  <summary>
-                    <span>{scaleLabel(p.scales, s)}</span>
-                    <span>{r.percentages[s]}%</span>
-                  </summary>
-                  <p>{interpretation(p.scales, s, r.levels[s])}</p>
-                </details>
-              ))}
+              <p className="growth-legend">
+                <i aria-hidden="true" />
+                {t('growth.goal', { v0: goal })}
+              </p>
+              <ol className="growth-chart" style={{ '--goal': `${goal}%` } as CSSProperties}>
+                {[...scaleIds]
+                  .sort((a, b) => r.percentages[a] - r.percentages[b])
+                  .map((s, i) => {
+                    const value = r.percentages[s];
+                    const gap = goal - value;
+                    const focus = i === 0 && gap > 0;
+                    return (
+                      <li className={`growth-item${focus ? ' is-focus' : ''}`} key={s}>
+                        <span className="growth-label">{syllables(scaleLabel(p.scales, s))}</span>
+                        <span className="growth-head">
+                          {focus && <span className="growth-focus">{t('growth.focus')}</span>}
+                          <strong className="growth-value">{value}%</strong>
+                          <span className={`growth-gap${gap > 0 ? '' : ' is-reached'}`}>
+                            {gap > 0 ? (
+                              <>
+                                <ArrowUp size={13} strokeWidth={2.6} aria-hidden="true" />+{gap}
+                                <span className="visually-hidden"> {t('growth.toGoal')}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={14} strokeWidth={2.8} aria-hidden="true" />
+                                <span className="visually-hidden">{t('growth.reached')}</span>
+                              </>
+                            )}
+                          </span>
+                        </span>
+                        <span className="growth-column" aria-hidden="true">
+                          {Array.from({ length: 10 }, (_, k) => (
+                            <span
+                              key={k}
+                              className={`growth-seg ${
+                                (k + 1) * 10 <= value
+                                  ? 'is-full'
+                                  : k * 10 < value
+                                    ? 'is-part'
+                                    : k * 10 < goal
+                                      ? 'to-goal'
+                                      : 'is-empty'
+                              }`}
+                              style={{ '--i': k } as CSSProperties}
+                            />
+                          ))}
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ol>
             </section>
           </div>
           {!readOnly && (
@@ -400,57 +425,86 @@ export default function Profile({
                   <h2>{t('text091')}</h2>
                 </div>
               </div>
-              <div className="recommendations-grid">
-                {r.recommendations.slice(recPage * 4, recPage * 4 + 4).map((rec, i) => (
-                  <article className="panel recommendation" key={rec.id}>
-                    <div className="rec-head">
-                      <span className="pill neutral">
-                        {
-                          {
-                            practice: t('text093'),
-                            mentor: t('text094'),
-                            microcourse: t('text095'),
-                            checklist: t('text096'),
-                          }[rec.format]
-                        }
-                      </span>
-                    </div>
-                    <span className="rec-scale">{scaleLabel(p.scales, rec.scale)}</span>
-                    <details className="rec-copy explanation">
-                      <summary>{recTitle(rec)}</summary>
-                      <p>{recText(rec)}</p>
-                    </details>
-                    <div className="rec-footer">
-                      <span>
-                        {rec.durationDays}
-                        {t('text097')}
-                      </span>
-                      <button className="text-button" onClick={() => void openModule(rec.link)}>
-                        {t('text098')}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              {r.recommendations.length > 4 && (
-                <div className="pagination">
+              <div
+                className={`recommendations-carousel${r.recommendations.length > 1 ? ' has-arrows' : ''}`}
+              >
+                {r.recommendations.length > 1 && (
                   <button
+                    className="carousel-arrow"
                     disabled={recPage === 0}
                     onClick={() => setRecPage(recPage - 1)}
                     aria-label={t('text099')}
                   >
-                    {t('text163')}
+                    <ArrowLeft size={18} aria-hidden="true" />
                   </button>
-                  <span>
-                    {recPage + 1} / {Math.ceil(r.recommendations.length / 4)}
-                  </span>
+                )}
+                <div className="recommendations-grid">
+                  {r.recommendations.slice(recPage, recPage + 1).map((rec) => {
+                    const RecommendationIcon = {
+                      practice: Target,
+                      mentor: UserRound,
+                      microcourse: BookOpen,
+                      checklist: ClipboardList,
+                    }[rec.format];
+                    return (
+                      <article
+                        className={`recommendation recommendation-${rec.format}`}
+                        key={rec.id}
+                      >
+                        <div className="recommendation-top">
+                          <span className="recommendation-icon" aria-hidden="true">
+                            <RecommendationIcon size={19} />
+                          </span>
+                          <span className="rec-category">
+                            {
+                              {
+                                practice: t('text093'),
+                                mentor: t('text094'),
+                                microcourse: t('text095'),
+                                checklist: t('text096'),
+                              }[rec.format]
+                            }
+                          </span>
+                        </div>
+                        <span className="rec-scale">{scaleLabel(p.scales, rec.scale)}</span>
+                        <details className="rec-copy explanation">
+                          <summary>{recTitle(rec)}</summary>
+                          <p>{recText(rec)}</p>
+                        </details>
+                        <div className="rec-footer">
+                          <span className="rec-duration">
+                            <Clock size={15} aria-hidden="true" />
+                            {rec.durationDays}
+                            {t('text097')}
+                          </span>
+                          <button
+                            className="button primary"
+                            onClick={() => void openModule(rec.link)}
+                          >
+                            {t('text098')}
+                            <ArrowRight size={15} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                {r.recommendations.length > 1 && (
                   <button
-                    disabled={(recPage + 1) * 4 >= r.recommendations.length}
+                    className="carousel-arrow"
+                    disabled={recPage + 1 >= r.recommendations.length}
                     onClick={() => setRecPage(recPage + 1)}
                     aria-label={t('text100')}
                   >
-                    {t('text193')}
+                    <ArrowRight size={18} aria-hidden="true" />
                   </button>
+                )}
+              </div>
+              {r.recommendations.length > 1 && (
+                <div className="carousel-progress" aria-live="polite">
+                  <span>{recPage + 1}</span>
+                  <i aria-hidden="true" />
+                  {r.recommendations.length}
                 </div>
               )}
               {r.strongUse && (
@@ -469,11 +523,11 @@ export default function Profile({
               )}
               <section className="next-step">
                 <div>
+                  <span className="next-step-icon" aria-hidden="true">
+                    <Wrench size={30} />
+                  </span>
                   <h2>{recTitle(r.nextStep)}</h2>
-                  <button
-                    className="button primary"
-                    onClick={() => void openModule(r.nextStep.link)}
-                  >
+                  <button className="button" onClick={() => void openModule(r.nextStep.link)}>
                     {t('text103')}
                   </button>
                 </div>
@@ -546,69 +600,91 @@ export default function Profile({
           </section>
         </>
       )}
-      <Disclaimer />
-    </>
+    </div>
   );
 }
+// Add soft hyphens between syllables for narrow columns.
+const syllables = (text: string) =>
+  text.replace(/\p{L}{10,}/gu, (word) =>
+    word.replace(
+      /(?<=\p{L}{3})(?=[^aeiouyаеёиоуыэюяәіөүұьъй\P{L}][aeiouyаеёиоуыэюяәіөүұ]\p{L})/giu,
+      '­',
+    ),
+  );
+
 function Radar({ scores, labels }: { scores: Scores; labels: TestConfig['scales'] }) {
+  const cx = 215,
+    cy = 150,
+    R = 104;
   const point = (i: number, v: number) => {
     const a = ((i * 90 - 90) * Math.PI) / 180;
-    return `${130 + Math.cos(a) * 65 * v},${100 + Math.sin(a) * 65 * v}`;
+    return [cx + Math.cos(a) * R * v, cy + Math.sin(a) * R * v] as const;
   };
+  const names = [t('text115'), t('text116'), t('text117'), t('text118')];
+  const tags = [
+    { x: cx, name: cy - R - 30, value: cy - R - 12, anchor: 'middle' },
+    { x: cx + R + 16, name: cy - 5, value: cy + 14, anchor: 'start' },
+    { x: cx, name: cy + R + 42, value: cy + R + 24, anchor: 'middle' },
+    { x: cx - R - 16, name: cy - 5, value: cy + 14, anchor: 'end' },
+  ] as const;
   return (
     <svg
       className="radar"
-      viewBox="0 0 260 205"
+      viewBox="0 0 430 304"
       role="img"
       aria-label={t('text113', {
         v0: scaleIds.map((s) => `${scaleLabel(labels, s)} ${scores[s]}%`).join(', '),
       })}
     >
       <title>{t('text114')}</title>
+      <defs>
+        <linearGradient id="radar-fill" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" style={{ stopColor: 'var(--accent)', stopOpacity: 0.34 }} />
+          <stop offset="100%" style={{ stopColor: '#6d5dfc', stopOpacity: 0.12 }} />
+        </linearGradient>
+      </defs>
+      <circle className="radar-disc" cx={cx} cy={cy} r={R} />
       {[0.25, 0.5, 0.75, 1].map((v) => (
-        <polygon
-          key={v}
-          className="radar-grid"
-          points={scaleIds.map((_, i) => point(i, v)).join(' ')}
-        />
+        <circle key={v} className="radar-grid" cx={cx} cy={cy} r={R * v} />
       ))}
       {scaleIds.map((_, i) => (
         <line
           key={i}
           className="radar-grid"
-          x1="130"
-          y1="100"
-          x2={point(i, 1).split(',')[0]}
-          y2={point(i, 1).split(',')[1]}
+          x1={cx}
+          y1={cy}
+          x2={point(i, 1)[0]}
+          y2={point(i, 1)[1]}
         />
       ))}
       <polygon
         className="radar-shape"
-        points={scaleIds.map((s, i) => point(i, scores[s] / 100)).join(' ')}
+        points={scaleIds.map((s, i) => point(i, scores[s] / 100).join(',')).join(' ')}
       />
       {scaleIds.map((s, i) => (
         <circle
           key={s}
           className="radar-dot"
-          cx={point(i, scores[s] / 100).split(',')[0]}
-          cy={point(i, scores[s] / 100).split(',')[1]}
-          r="3.5"
-        />
+          cx={point(i, scores[s] / 100)[0]}
+          cy={point(i, scores[s] / 100)[1]}
+          r="5.5"
+          tabIndex={0}
+          role="img"
+          aria-label={`${scaleLabel(labels, s)} ${scores[s]}%`}
+        >
+          <title>{`${scaleLabel(labels, s)} ${scores[s]}%`}</title>
+        </circle>
       ))}
-      <g fontSize="10" fontFamily="sans-serif">
-        <text x="130" y="18" textAnchor="middle">
-          {t('text115')}
-        </text>
-        <text x="202" y="104">
-          {t('text116')}
-        </text>
-        <text x="130" y="190" textAnchor="middle">
-          {t('text117')}
-        </text>
-        <text x="0" y="104">
-          {t('text118')}
-        </text>
-      </g>
+      {scaleIds.map((s, i) => (
+        <g key={s} className="radar-tag" textAnchor={tags[i].anchor} aria-hidden="true">
+          <text className="radar-name" x={tags[i].x} y={tags[i].name}>
+            {names[i]}
+          </text>
+          <text className="radar-value" x={tags[i].x} y={tags[i].value}>
+            {scores[s]}%
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }

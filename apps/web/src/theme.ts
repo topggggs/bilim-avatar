@@ -1,11 +1,10 @@
 import { useSyncExternalStore } from 'react';
 export type Theme = 'light' | 'dark';
-/** Shared with public/theme.js, which applies the same choice before the first paint. */
+
 const storageKey = 'bilim-theme';
 const listeners = new Set<() => void>();
 const media =
   typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : undefined;
-// An explicit choice wins; without one the page follows the OS setting, live.
 let saved: Theme | null = null;
 try {
   const value = localStorage.getItem(storageKey);

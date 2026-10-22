@@ -191,6 +191,14 @@ describe('регистрация и доступ', () => {
     await post(a, '/password/login', { email: 'worker@company.kz', password }).expect(401);
     expect((await store.read()).accounts[0].lockedUntil).toBeTruthy();
   });
+  it('"*" в REGISTRATION_DOMAINS открывает регистрацию для любой почты', async () => {
+    vi.stubEnv('REGISTRATION_DOMAINS', '*');
+    app = createApp(store, { demo: true, origin });
+    const res = await post(agent(), '/register/request', { email: 'reviewer@gmail.com' }).expect(
+      200,
+    );
+    expect(res.body.previewLink).toBeTruthy();
+  });
   it('scrypt с солью, корректным сравнением и отклонением повреждённого хеша', async () => {
     const a = await hashPassword(password),
       b = await hashPassword(password);
@@ -432,7 +440,7 @@ describe('доставка и production', () => {
       password,
       consent: true,
     }).expect(201);
-    // Production cookies are Secure; supertest speaks plain HTTP, so pass the session explicitly.
+    // Supertest uses HTTP; pass the Secure session cookie explicitly.
     await request(app)
       .post('/api/test/sessions')
       .set('Origin', origin)

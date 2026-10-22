@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { createStore, audit, type User } from '../apps/api/src/store.js';
-// Bootstrap the first admin: npm run db:user -- oidc-subject admin "Имя"
 const [sub, role, name] = process.argv.slice(2);
 if (!sub || !['employee', 'manager', 'methodologist', 'admin'].includes(role) || !name)
   throw Error('Usage: db:user -- <OIDC subject> <role> <name>');

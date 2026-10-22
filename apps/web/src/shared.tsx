@@ -16,7 +16,7 @@ const uiTexts: Record<string, typeof uiRu> = { ru: uiRu, en: uiEn, kk: uiKk };
 export const ui = () => uiTexts[getLanguage()];
 export const levelLabel = (level: Level) =>
   t(level === 'low' ? 'text036' : level === 'medium' ? 'text037' : 'text038');
-/** Visual lockup only; the surrounding link carries the accessible name "BI Group". */
+// The surrounding link provides the accessible name.
 export function Brand() {
   return (
     <span className="brand-lockup" aria-hidden="true">
@@ -40,12 +40,6 @@ export type Portrait = {
     rubricVersion?: string;
     items: { id: string; text: string; answer: string }[];
   };
-  answerStatistics?: {
-    average: number;
-    count: number;
-    distribution: { value: number; count: number }[];
-    items: { id: string; text: string; scales: Scale[]; answer: number }[];
-  } | null;
   completedAt?: string;
   sessionId?: string;
   avatar: AvatarView | null;
@@ -72,7 +66,7 @@ export type Draft = {
   answers: Record<string, string | number>;
   index: number;
 };
-// Chromium's Intl has no Kazakh month names (it prints "2026 M10 16"), so kk is formatted by hand.
+// Format Kazakh month names manually for Intl compatibility.
 const kazakhMonths = [
   'қаңтар',
   'ақпан',
@@ -108,12 +102,4 @@ export function readDraft(id: string): Draft | null {
   } catch {
     return null;
   }
-}
-export function Disclaimer() {
-  return (
-    <details className="disclaimer">
-      <summary>{ui().disclaimer}</summary>
-      <p>{ui().methodology}</p>
-    </details>
-  );
 }

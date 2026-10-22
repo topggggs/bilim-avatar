@@ -319,7 +319,6 @@ describe('buildAvatar', () => {
     expect(() => lookSchema.parse({ ...look, script: '<script>' })).toThrow();
   });
   it('каждый аксессуар на каждом герое даёт корректный SVG без NaN и undefined', () => {
-    // Minimal XML well-formedness: every opened tag is closed in order.
     const wellFormed = (svg: string) => {
       const stack: string[] = [];
       for (const [, closing, name, selfClosing] of svg.matchAll(/<(\/?)([a-zA-Z]+)[^>]*?(\/?)>/g)) {

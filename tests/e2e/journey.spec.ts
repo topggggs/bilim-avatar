@@ -31,6 +31,15 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
   await page.goto('/');
   await navigate(page, 'Мой профиль');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
+  expect(await page.locator('.profile-shell').count()).toBe(1);
+  expect(
+    await page.locator('.site-header').evaluate((element) => element.getBoundingClientRect().width),
+  ).toBe(await page.evaluate(() => window.innerWidth));
+  expect(
+    await page
+      .locator('.content')
+      .evaluate((element) => getComputedStyle(element, '::before').backgroundImage),
+  ).toContain('academy-architecture.png');
   await create(page);
   const answer =
     'Сверю факты с проектом, проверю риски, согласую безопасный план и зафиксирую результат.';
@@ -102,8 +111,30 @@ test('сотрудник: offline, reload, 15 вопросов, равные к�
   expect(profile.writtenReview.items[1].answer).toBe(answer);
   expect(profile.writtenReview.model).toBe('e2e-fixture');
   await expect(page.getByRole('heading', { name: 'Анализ ответов', exact: true })).toBeVisible();
+  await expect(page.locator('.written-review .written-insights details > summary')).toHaveCount(4);
+  await expect(page.locator('.written-review .written-insights summary').first()).toHaveCSS(
+    'list-style-type',
+    'none',
+  );
+  expect(
+    await page.locator('.radar').evaluate((element) => element.getBoundingClientRect().width),
+  ).toBeGreaterThanOrEqual(340);
+  await expect(page.locator('.radar-dot')).toHaveCount(4);
+  await expect(page.locator('.radar-dot').first()).toHaveAttribute('role', 'img');
+  await expect(page.locator('.profile-page-title .date-tag')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Сильные стороны', exact: true })).toBeVisible();
+  await expect(page.locator('.insight-mark')).toHaveCount(0);
+  await expect(page.locator('.strength-donut')).toHaveCount(1);
+  await expect(page.locator('.strength-donut')).toHaveAttribute('role', 'meter');
   await expect(page.getByRole('heading', { name: 'Зоны роста', exact: true })).toBeVisible();
+  await expect(page.locator('.growth-item')).toHaveCount(4);
+  await expect(page.locator('.recommendation')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Следующие рекомендации' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Следующие рекомендации' }).click();
+  await expect(page.locator('.carousel-progress')).toContainText('2');
+  await page.getByRole('button', { name: 'Предыдущие рекомендации' }).click();
+  await expect(page.locator('.carousel-progress')).toContainText('1');
+  await expect(page.locator('.rec-footer .button.primary')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Пройти снова' })).toBeDisabled();
   await page.getByRole('button', { name: 'Выбрать', exact: true }).click();
   await expect(page.getByText('Аватар сохранён', { exact: true })).toBeVisible();
@@ -176,11 +207,24 @@ test('доступность: профиль без нарушений WCAG AA',
 test('главная BI: баннеры, свой профиль, маршрут и мобильная версия', async ({ page }) => {
   await auth(page);
   await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('bilim-theme', 'light'));
+  await page.reload();
   await expect(
     page.getByRole('heading', { name: 'Стройте своё будущее', exact: true }),
   ).toBeVisible();
-  // Same profile the first journey test produces (question 1 answered with 1 → discipline 38%).
   await expect(page.locator('.home-quality-card strong')).toHaveText(['50%', '50%', '38%', '50%']);
+  await expect(page.locator('.home-shortcuts')).toHaveCount(0);
+  await expect(page.locator('.home-hero-grid + .home-overview')).toHaveCount(1);
+  await expect(page.locator('.page-bg')).toHaveCount(1);
+  expect(
+    await page
+      .locator('.page-bg')
+      .evaluate((element) => (element as HTMLElement).style.backgroundImage),
+  ).toContain('feTurbulence');
+  await expect(page.locator('.page-bg')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(page.locator('.home-overview')).toHaveCSS('margin-top', '32px');
+  await expect(page.locator('.home-overview .section-heading')).toHaveCount(0);
+  await expect(page.locator('.home-overview .home-quality-grid')).toBeVisible();
   await page.screenshot({ path: 'docs/site-preview.png' });
   await page.screenshot({ path: 'docs/home-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Начать развитие', exact: true }).click();
@@ -202,6 +246,7 @@ test('главная BI: баннеры, свой профиль, маршрут
   await expect(
     page.getByRole('heading', { name: 'Стройте своё будущее', exact: true }),
   ).toBeVisible();
+  await expect(page.locator('.home-shortcuts')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -305,10 +350,21 @@ test('тёмная тема: переключатель, запоминание,
   await page.goto('/');
   const toggle = page.locator('.header-actions').getByRole('button', { name: 'Тёмная тема' });
   await expect(html).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('.page-bg')).toHaveCount(1);
+  expect(
+    await page.locator('.page-bg').evaluate((element) => getComputedStyle(element).backgroundImage),
+  ).toContain('feTurbulence');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await toggle.click();
   await expect(html).toHaveAttribute('data-theme', 'dark');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.page-bg')).toHaveCSS('background-color', 'rgb(11, 15, 23)');
+  expect(
+    await page
+      .locator('.page-bg')
+      .evaluate((element) => (element as HTMLElement).style.backgroundImage),
+  ).toContain('feTurbulence');
+  await expect(page.locator('.home-overview')).toHaveCSS('margin-top', '32px');
   const colours = () =>
     page.evaluate(() => [
       getComputedStyle(document.documentElement).backgroundColor,
@@ -344,7 +400,6 @@ test('тёмная тема: переключатель, запоминание,
     await expect(page.locator('.content')).not.toBeEmpty();
     expect(await violations(), `${role}: ${section}`).toEqual([]);
   }
-  // The choice survives a reload, and on a phone the switch moves into the user menu.
   await page.reload();
   await expect(html).toHaveAttribute('data-theme', 'dark');
   await page.setViewportSize({ width: 375, height: 812 });
@@ -356,7 +411,6 @@ test('тёмная тема: переключатель, запоминание,
   await page.screenshot({ path: 'docs/menu-dark-mobile.png' });
   await item.click();
   await expect(html).toHaveAttribute('data-theme', 'light');
-  // Without a saved choice the page follows the OS setting, including live changes.
   const context = await browser.newContext({ baseURL, colorScheme: 'dark' });
   const fresh = await context.newPage();
   await fresh.goto('/');

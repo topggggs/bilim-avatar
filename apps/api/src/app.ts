@@ -69,7 +69,7 @@ function publicAvatar(a: Avatar) {
     config: a.config,
     status: a.status,
     name: avatarName(a.config),
-    // The image is cached for 30 s, so a saved look must change the URL.
+    // Change the URL after editing to invalidate the image cache.
     imageUrl: `/api/avatars/${a.id}/image${a.customizedAt ? `?v=${Date.parse(a.customizedAt)}` : ''}`,
     createdAt: a.createdAt,
     fixed: a.fixed,
@@ -96,7 +96,7 @@ export function createApp(
   app.disable('x-powered-by');
   const configuredOrigin = new URL(options.origin);
   const allowedOrigins = new Set([configuredOrigin.origin]);
-  // `npm run dev` serves Vite on 127.0.0.1 while APP_ORIGIN usually says localhost.
+  // Allow localhost and 127.0.0.1 aliases during development.
   if (options.demo || process.env.NODE_ENV === 'development') {
     const hosts = [configuredOrigin.hostname];
     if (configuredOrigin.hostname === 'localhost') hosts.push('127.0.0.1');
@@ -372,7 +372,7 @@ export function createApp(
     if (pending) {
       if (!pending.running) {
         const job = pending;
-        // The provider call runs outside the store transaction; no lock is held over the network.
+        // Do not hold the store transaction during the model request.
         void (async () => {
           try {
             const report = await options.analyze!(job.answers, job.config);
@@ -660,7 +660,6 @@ export function createApp(
       if (variants.some((x) => ['queued', 'generating'].includes(x.status)))
         throw new ApiError(409, 'Дождитесь текущей генерации');
       const prev = variants[0];
-      // A new variant shows the next preset, not a look someone saved on another variant.
       const { look: _look, ...config } = prev.config;
       const { prompt, fallbackSvg } = buildAvatar(config, variants.length);
       const next: Avatar = {
@@ -722,7 +721,7 @@ export function createApp(
       const built = buildAvatar(av.config, variants.indexOf(av));
       av.prompt = built.prompt;
       av.fallbackSvg = built.fallbackSvg;
-      // The saved look is drawn as an illustration; an earlier AI image would no longer match it.
+      // A previous AI image no longer matches the edited look.
       av.imageKey = undefined;
       av.status = 'fallback';
       av.customizedAt = new Date().toISOString();

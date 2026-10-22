@@ -74,9 +74,10 @@ export function auth(
         sendSms: options.sendSms,
         phone,
         otpSecret: secret,
+        // "*" explicitly allows registration from any confirmed email.
         domains: process.env.REGISTRATION_DOMAINS?.split(',')
           .map((s) => s.trim().toLowerCase())
-          .filter(Boolean),
+          .filter((s) => s && s !== '*'),
         signIn: async (res, uid, sv) => {
           res.cookie('bilim_session', await token({ uid, sv, kind: 'local' }), {
             ...cookie,

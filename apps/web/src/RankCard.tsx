@@ -1,3 +1,4 @@
+import { Award, BadgeCheck, Check, CircleCheck, ListChecks, Star } from 'lucide-react';
 import { useState } from 'react';
 import { api } from './api';
 import { rankName, recText, recTitle } from './content';
@@ -37,30 +38,45 @@ export default function RankCard({
   return (
     <section className="rank-card panel" aria-label={t('rank.label')}>
       <div className="rank-heading">
-        <div>
+        <span className="rank-emblem" aria-hidden="true">
+          <Award size={26} />
+        </span>
+        <div className="rank-title">
           <span className="card-category">{t('rank.label')}</span>
           <h2>{rankName(rank.current)}</h2>
         </div>
-        <span className="rank-count">{t('rank.completed', { count: rank.completed })}</span>
+        <span className="rank-count">
+          <BadgeCheck size={16} aria-hidden="true" />
+          {t('rank.completed', { count: rank.completed })}
+        </span>
       </div>
       <ol className="rank-ladder" aria-label={t('rank.levels')}>
-        {rank.ranks.map((r) => (
+        {rank.ranks.map((r, i) => (
           <li
             key={r.id}
             className={rank.points >= r.points ? 'reached' : ''}
             aria-current={rank.current.id === r.id ? 'step' : undefined}
           >
-            {rankName(r)}
+            <span className="rank-node" aria-hidden="true">
+              {rank.current.id === r.id ? (
+                <Star size={14} />
+              ) : rank.points >= r.points ? (
+                <Check size={14} />
+              ) : (
+                i + 1
+              )}
+            </span>
+            <span className="rank-name">{rankName(r)}</span>
           </li>
         ))}
       </ol>
       {rank.next ? (
-        <>
+        <div className="rank-progress">
           <div className="rank-progress-label">
             <span>{t('rank.next', { name: rankName(rank.next) })}</span>
-            <span>
+            <b>
               {p.result ? rank.completed : 0} / {p.result ? rank.next.points - 1 : 1}
-            </span>
+            </b>
           </div>
           <progress
             aria-label={t('rank.next', { name: rankName(rank.next) })}
@@ -70,9 +86,9 @@ export default function RankCard({
           <p className="rank-hint">
             {p.result ? t('rank.remaining', { count: rank.remaining }) : t('rank.first')}
           </p>
-        </>
+        </div>
       ) : (
-        <p className="rank-hint">{t('rank.top')}</p>
+        <p className="rank-hint rank-progress">{t('rank.top')}</p>
       )}
       <details className="explanation rank-rules">
         <summary>{t('rank.rules')}</summary>
@@ -80,7 +96,11 @@ export default function RankCard({
       </details>
       {tasks && p.result && (
         <details className="rank-tasks">
-          <summary>{t('rank.tasks')}</summary>
+          <summary>
+            <ListChecks size={18} aria-hidden="true" />
+            <span>{t('rank.tasks')}</span>
+            <span className="rank-tasks-count">{p.development.tasks.length}</span>
+          </summary>
           <div className="rank-task-list">
             {p.development.tasks.map((task) => {
               const record = records.find((r) => r.recommendationId === task.id);
@@ -146,6 +166,7 @@ export default function RankCard({
                           setEvidence(record?.evidence ?? '');
                         }}
                       >
+                        <CircleCheck size={16} aria-hidden="true" />
                         {t('rank.done')}
                       </button>
                     ))}

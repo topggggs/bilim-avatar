@@ -1,5 +1,3 @@
-// Full weight files carry unicode-range per subset, so browsers fetch only the scripts on screen
-// (Cyrillic, Kazakh Ө Ү Һ from cyrillic-ext, Latin for English).
 import '@fontsource/manrope/400.css';
 import '@fontsource/manrope/500.css';
 import '@fontsource/manrope/600.css';

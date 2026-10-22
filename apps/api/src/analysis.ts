@@ -46,7 +46,7 @@ function validatedReport(text: string, model: string, config: TestConfig): Analy
   writtenProfile(report, config);
   return report;
 }
-/** Gemini supports a subset of JSON Schema. The full Zod schema still validates the result locally. */
+// Gemini uses a schema subset; validate the full report locally.
 function geminiJsonSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(geminiJsonSchema);
   if (value && typeof value === 'object')
@@ -62,7 +62,7 @@ export class AnalysisUnavailableError extends Error {
     super('ИИ-анализ пока не подключён. Ответы сохранены.');
   }
 }
-/** Defence in depth. Free text may still contain identifying context; consent and UI warn about it. */
+// Contact masking does not fully anonymize free text.
 export function redactContacts(text: string) {
   return text
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
@@ -121,7 +121,7 @@ export function createAnalyzer(
               maxOutputTokens: 10000,
               responseFormat: {
                 text: {
-                  // generateContent REST uses an enum here, unlike the MIME string in responseMimeType.
+                  // REST expects APPLICATION_JSON, not a MIME string.
                   mimeType: 'APPLICATION_JSON',
                   schema: geminiJsonSchema(z.toJSONSchema(analysisSchema)),
                 },
@@ -169,7 +169,7 @@ export function createAnalyzer(
         },
       }),
     });
-    // Never expose provider bodies, tokens or submitted answers in errors/logs.
+    // Do not log provider bodies, keys or answers.
     if (!response.ok) throw new Error('analysis_provider_unavailable');
     const body = (await response.json()) as {
       status?: string;

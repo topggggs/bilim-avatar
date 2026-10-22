@@ -16,10 +16,7 @@ const translation = () => {
   const language = getLanguage();
   return language === 'ru' ? undefined : translations[language];
 };
-/**
- * Methodology texts are edited in Russian. A translation is shown only while the server text still
- * matches the bundled original, so an edited question never shows an outdated translation.
- */
+// Translate unchanged source text only, to avoid stale translations.
 const localized = (text: string, original?: string, translated?: string) =>
   translated && text === original ? translated : text;
 export const scaleLabel = (scales: TestConfig['scales'], s: Scale) =>
@@ -46,7 +43,7 @@ export const recText = (r: { id: string; text: string }) =>
     seedRecommendations.get(r.id)?.text,
     translation()?.recommendations[r.id]?.text,
   );
-/** The server writes this hint in Russian; other languages rebuild it from the strongest scale. */
+
 export function strongUse(result: Result, scales: TestConfig['scales']) {
   if (!result.strongUse || getLanguage() === 'ru') return result.strongUse;
   return t('content.strongUse', {

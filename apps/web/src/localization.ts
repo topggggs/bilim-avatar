@@ -9,7 +9,7 @@ export const languages = [
   { id: 'kk', code: 'KZ', name: 'Қазақша', locale: 'kk-KZ' },
 ] as const;
 export type Language = (typeof languages)[number]['id'];
-/** Russian is the source copy; the other dictionaries must define every key (checked by tsc and tests). */
+
 const dictionaries: Record<Language, Record<Key, string>> = { ru, en, kk };
 const storageKey = 'bilim-language';
 const listeners = new Set<() => void>();
@@ -36,7 +36,7 @@ export function setLanguage(next: Language) {
   syncDocument();
   listeners.forEach((listener) => listener());
 }
-/** Subscribing the root re-renders the whole tree, so every t() call below it re-reads the dictionary. */
+
 export const useLanguage = () => useSyncExternalStore(subscribe, getLanguage);
 export const locale = () => languages.find((l) => l.id === current)!.locale;
 export function t(key: Key, values: Record<string, unknown> = {}): string {
@@ -46,7 +46,6 @@ export function t(key: Key, values: Record<string, unknown> = {}): string {
   );
 }
 export const hasKey = (key: string): key is Key => key in dictionaries.ru;
-// The API answers in Russian; known messages are mapped back to their `server.*` key.
 const serverKeys = new Map(
   Object.entries(ru)
     .filter(([key]) => key.startsWith('server.'))

@@ -1,9 +1,28 @@
 import RankCard from '../RankCard';
+import {
+  ArrowRight,
+  BookOpen,
+  ClipboardList,
+  Clock,
+  GraduationCap,
+  HardHat,
+  Target,
+  TrendingUp,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../api';
 import { recText, recTitle, scaleLabel } from '../content';
 import { t } from '../localization';
-import { Disclaimer, type Portrait } from '../shared';
+import type { Portrait } from '../shared';
+
+const formatIcon = {
+  practice: Target,
+  mentor: UserRound,
+  microcourse: BookOpen,
+  checklist: ClipboardList,
+};
 
 export default function LearningRoute({
   portrait: p,
@@ -28,46 +47,70 @@ export default function LearningRoute({
   }
   const steps = [
     {
+      id: 'bilim',
       name: 'Bilim',
+      icon: BookOpen,
       title: t('route.bilim'),
       detail: t('route.bilimDetail'),
-      status: currentStage === 'bilim' ? 'current' : 'pending',
     },
     {
+      id: 'buildex',
       name: 'BuildEX',
+      icon: HardHat,
       title: t('route.buildex'),
       detail: t('route.buildexDetail'),
-      status: currentStage === 'buildex' ? 'current' : 'pending',
     },
     {
+      id: 'biu',
       name: 'BIU',
+      icon: GraduationCap,
       title: t('route.biu'),
       detail: t('route.biuDetail'),
-      status: currentStage === 'biu' ? 'current' : 'pending',
     },
-    { name: 'KPI', title: t('route.kpi'), detail: t('route.kpiDetail'), status: 'pending' },
+    {
+      id: 'kpi',
+      name: 'KPI',
+      icon: TrendingUp,
+      title: t('route.kpi'),
+      detail: t('route.kpiDetail'),
+    },
   ];
   return (
     <div className="learning-route">
       <div className="page-title">
         <h1>{t('home.routeNav')}</h1>
       </div>
+      <ol className="route-stages" aria-label={t('route.stages')}>
+        {steps.map((s, i) => {
+          const current = s.id === currentStage;
+          const Icon = s.icon;
+          return (
+            <li
+              key={s.id}
+              className={`route-stage ${current ? 'current' : 'pending'}`}
+              aria-current={current ? 'step' : undefined}
+            >
+              <span className="route-stage-node" aria-hidden="true">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <div className="route-stage-card">
+                <div className="route-stage-top">
+                  <span className="route-stage-icon" aria-hidden="true">
+                    <Icon size={20} />
+                  </span>
+                  <span className="route-stage-platform">{s.name}</span>
+                </div>
+                <h2>{s.title}</h2>
+                <p>{s.detail}</p>
+                <span className="route-stage-state">
+                  {current ? t('route.current') : t('route.planned')}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
       <RankCard portrait={p} tasks refresh={refresh} />
-      <div className="route-stages">
-        {steps.map((s, i) => (
-          <article key={s.name} className={`route-stage ${s.status}`}>
-            <div className="route-stage-top">
-              <span>{String(i + 1).padStart(2, '0')}</span>
-              <span>{s.name}</span>
-            </div>
-            <h2>{s.title}</h2>
-            <p>{s.detail}</p>
-            <span className="route-stage-state">
-              {s.status === 'current' ? t('route.current') : t('route.planned')}
-            </span>
-          </article>
-        ))}
-      </div>
       {!p.result ? (
         <section className="route-empty panel">
           <h2>{t('route.needProfile')}</h2>
@@ -79,28 +122,53 @@ export default function LearningRoute({
         <>
           <div className="section-heading">
             <h2>{t('text091')}</h2>
-            <span>{scaleLabel(p.scales, p.result.weakest)}</span>
+            <span className="route-focus">
+              <Target size={14} aria-hidden="true" />
+              {scaleLabel(p.scales, p.result.weakest)}
+            </span>
           </div>
           <div className="route-recommendations">
-            {p.result.recommendations.slice(recPage * 4, recPage * 4 + 4).map((rec) => (
-              <article key={rec.id} className="route-rec panel">
-                <span>{scaleLabel(p.scales, rec.scale)}</span>
-                <h3>{recTitle(rec)}</h3>
-                <details className="explanation">
-                  <summary>{t('details')}</summary>
-                  <p>{recText(rec)}</p>
-                </details>
-                <div className="route-rec-bottom">
-                  <span>
-                    {rec.durationDays}
-                    {t('text097')}
-                  </span>
-                  <button className="button secondary" onClick={() => void open(rec.link)}>
-                    {t('text098')}
-                  </button>
-                </div>
-              </article>
-            ))}
+            {p.result.recommendations.slice(recPage * 4, recPage * 4 + 4).map((rec) => {
+              const Icon = formatIcon[rec.format];
+              return (
+                <article key={rec.id} className={`route-rec panel route-rec-${rec.format}`}>
+                  <div className="route-rec-top">
+                    <span className="recommendation-icon" aria-hidden="true">
+                      <Icon size={19} />
+                    </span>
+                    <span className="route-rec-meta">
+                      <span>
+                        {
+                          {
+                            practice: t('text093'),
+                            mentor: t('text094'),
+                            microcourse: t('text095'),
+                            checklist: t('text096'),
+                          }[rec.format]
+                        }
+                      </span>
+                      <span>{scaleLabel(p.scales, rec.scale)}</span>
+                    </span>
+                  </div>
+                  <h3>{recTitle(rec)}</h3>
+                  <details className="explanation">
+                    <summary>{t('details')}</summary>
+                    <p>{recText(rec)}</p>
+                  </details>
+                  <div className="route-rec-bottom">
+                    <span className="route-rec-duration">
+                      <Clock size={15} aria-hidden="true" />
+                      {rec.durationDays}
+                      {t('text097')}
+                    </span>
+                    <button className="button secondary" onClick={() => void open(rec.link)}>
+                      {t('text098')}
+                      <ArrowRight size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
           {p.result.recommendations.length > 4 && (
             <div className="pagination">
@@ -129,11 +197,10 @@ export default function LearningRoute({
         <div className="alert" role="status">
           {notice}
           <button onClick={() => setNotice('')} aria-label={t('text101')}>
-            ×
+            <X size={18} />
           </button>
         </div>
       )}
-      <Disclaimer />
     </div>
   );
 }

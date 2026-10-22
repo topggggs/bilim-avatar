@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   choices,
@@ -231,6 +232,7 @@ export default function TestFlow({
     <div className="flow" aria-busy={busy}>
       <div className="flow-top">
         <button className="text-button" disabled={busy} onClick={onExit}>
+          <ArrowLeft size={16} aria-hidden="true" />
           {t('text136')}
         </button>
         <span className="flow-progress-text">
@@ -421,7 +423,7 @@ export default function TestFlow({
           </button>
         </section>
       ) : (
-        <section className="question-panel panel">
+        <section className={`question-panel panel${written ? ' is-written' : ''}`}>
           <div className="question-meta">
             <span>
               {t('text175')}

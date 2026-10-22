@@ -113,7 +113,7 @@ const isGmail = () => process.env.SMTP_HOST?.trim().toLowerCase() === 'smtp.gmai
 function smtpTransport() {
   const port = Number(process.env.SMTP_PORT ?? 587);
   const user = process.env.SMTP_USER?.trim();
-  // Google shows app passwords in groups of four; the spaces are not part of the secret.
+  // Gmail app-password spaces are display formatting.
   const pass = isGmail()
     ? process.env.SMTP_PASSWORD?.replace(/\s+/g, '')
     : process.env.SMTP_PASSWORD;
@@ -133,7 +133,7 @@ function smtpTransport() {
   });
 }
 type SmtpError = { code?: string; responseCode?: number; response?: string; message?: string };
-// Known configuration causes only; arbitrary error text is never shown to the browser.
+// Return known configuration errors only.
 export function smtpProblem(error: unknown) {
   const e = error as SmtpError | undefined;
   if (e?.code === 'EAUTH' || e?.responseCode === 535)
@@ -143,7 +143,6 @@ export function smtpProblem(error: unknown) {
   if (['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ECONNREFUSED'].includes(e?.code ?? ''))
     return `Нет соединения с ${process.env.SMTP_HOST}:${process.env.SMTP_PORT ?? 587}: проверьте SMTP_HOST, SMTP_PORT и доступ в интернет.`;
 }
-// Server responses (e.g. "535 5.7.8 ...") never echo the password, so they are safe to log.
 export function smtpLogDetails(error: unknown) {
   const e = error as SmtpError | undefined;
   return (
@@ -169,7 +168,6 @@ export function smtpMailer(): SendAuthMail {
     });
   };
 }
-// The web client sends its selected interface language; anything else falls back to Russian.
 const mailLanguage = (req: Request): MailLanguage =>
   (req.acceptsLanguages(...mailLanguages) || 'ru') as MailLanguage;
 function liveToken(s: State, raw: string, kind: 'signup' | 'reset') {
@@ -207,7 +205,7 @@ export function localAuth(
       message: { error: 'Слишком много попыток. Повторите через 15 минут.' },
     }),
   );
-  // A real derivation for unknown emails keeps login comparison work comparable.
+  // Keep password-check work comparable for unknown accounts.
   const dummy = () => (dummyPassword ??= hashPassword(randomBytes(32).toString('hex')));
   const gmailNeedsCredentials =
     process.env.SMTP_HOST?.toLowerCase() === 'smtp.gmail.com' &&
@@ -247,7 +245,7 @@ export function localAuth(
       throw new AuthError(503, `Почта не настроена: заполните ${missingMailSetting} в .env.`);
     const raw = randomBytes(32).toString('base64url');
     const record = await store.tx((s) => {
-      // Keep expired records briefly for the per-address throttle, then remove them.
+      // Keep recent expired tokens for throttling.
       s.authTokens = s.authTokens.filter((t) => Date.parse(t.createdAt) > Date.now() - 86400000);
       const recent = s.authTokens.filter(
         (t) => t.email === email && Date.parse(t.createdAt) > Date.now() - 3600000,
@@ -317,7 +315,6 @@ export function localAuth(
         recent.some((x) => x.kind === body.kind && Date.parse(x.createdAt) > Date.now() - 60000)
       )
         throw new AuthError(429, 'Код уже запрошен. Подождите перед повторной отправкой.');
-      // A resend invalidates earlier codes for this number and purpose.
       for (const x of s.phoneChallenges)
         if (x.phone === body.phone && x.kind === body.kind) x.usedAt = new Date().toISOString();
       s.phoneChallenges.push({
@@ -355,7 +352,7 @@ export function localAuth(
       .strict()
       .parse(req.body);
     const token = randomBytes(32).toString('base64url');
-    // Incorrect attempts must commit, so return a failure instead of throwing in tx.
+    // Return failure so the attempt counter commits.
     const valid = await store.tx((s) => {
       const c = s.phoneChallenges.find((x) => x.id === body.challengeId);
       if (!c || c.usedAt || c.attempts >= 5 || Date.parse(c.expiresAt) <= Date.now()) return null;
@@ -396,7 +393,7 @@ export function localAuth(
       })
       .strict()
       .parse(req.body);
-    // Check a token before doing expensive password work, then re-check atomically.
+    // Check before hashing, then recheck atomically.
     liveToken(await store.read(), body.token, 'signup');
     const passwordHash = await hashPassword(body.password);
     const account = await store.tx((s) => {
@@ -465,7 +462,7 @@ export function localAuth(
         });
       throw new AuthError(401, 'Неверные данные для входа.');
     }
-    // A concurrent reset must invalidate a login that checked the old hash.
+    // A concurrent password reset invalidates this login.
     const current = await store.tx((s) => {
       const a = s.accounts.find((x) => x.id === account.id);
       if (

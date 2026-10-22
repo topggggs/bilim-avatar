@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { configSchema, scaleIds, type TestConfig } from '../../../../packages/core/src/index';
 import { api } from '../api';
 import { t } from '../localization';
-import { Disclaimer, levelLabel } from '../shared';
+import { levelLabel } from '../shared';
 export default function Methodology({
   config,
   canEdit,
@@ -270,7 +270,6 @@ export default function Methodology({
           />
         )}
       </fieldset>
-      <Disclaimer />
     </>
   );
 }

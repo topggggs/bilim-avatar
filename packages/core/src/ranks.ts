@@ -1,5 +1,5 @@
 import ranks from '../../../config/ranks.ru.json';
-/** Development milestones only; assessment percentages never affect the rank. */
+// Assessment percentages do not affect development ranks.
 export function developmentRank(hasAssessment: boolean, approvedRecommendationIds: string[]) {
   const completed = new Set(approvedRecommendationIds).size;
   const points = hasAssessment ? 1 + completed : 0;

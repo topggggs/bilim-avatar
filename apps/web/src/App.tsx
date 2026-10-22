@@ -13,9 +13,11 @@ import Profile from './pages/Profile';
 import Home from './pages/Home';
 import LearningRoute from './pages/LearningRoute';
 import TestFlow from './pages/TestFlow';
-import { Brand, Disclaimer, readDraft, type Draft, type Portrait } from './shared';
+import { Brand, readDraft, type Draft, type Portrait } from './shared';
+import { useTheme } from './theme';
 export default function App() {
   useLanguage();
+  const isDarkMode = useTheme() === 'dark';
   const [authLink, setAuthLink] = useState(readAuthLink);
   const [authMode, setAuthMode] = useState<AuthMode>({
     demo: false,
@@ -193,19 +195,24 @@ export default function App() {
     },
     { id: 'admin', text: t('text009'), show: user.role === 'admin' },
   ];
+  const showNav = page !== 'create';
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${page === 'profile' ? 'profile-shell' : ''} ${page === 'home' ? 'home-shell' : ''}`}
+    >
       <header className="site-header">
         <div className="site-main-header">
-          <button
-            className="site-menu-toggle"
-            aria-expanded={menuOpen}
-            aria-controls="site-navigation"
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            {t('header.sections')}
-            <span aria-hidden="true">{menuOpen ? '−' : '+'}</span>
-          </button>
+          {showNav && (
+            <button
+              className="site-menu-toggle"
+              aria-expanded={menuOpen}
+              aria-controls="site-navigation"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              {t('header.sections')}
+              <span aria-hidden="true">{menuOpen ? '−' : '+'}</span>
+            </button>
+          )}
           <a className="brand" href="/" aria-label="BI Group">
             <Brand />
           </a>
@@ -236,25 +243,40 @@ export default function App() {
             />
           </div>
         </div>
-        <nav id="site-navigation" className={`site-nav ${menuOpen ? 'is-open' : ''}`}>
-          {nav
-            .filter((n) => n.show)
-            .map((n) => (
-              <button
-                key={n.id}
-                onClick={() => {
-                  void navigate(n.id);
-                  setMenuOpen(false);
-                }}
-                className={page === n.id ? 'active' : ''}
-                aria-current={page === n.id ? 'page' : undefined}
-              >
-                {n.text}
-              </button>
-            ))}
-        </nav>
+        {showNav && (
+          <nav id="site-navigation" className={`site-nav ${menuOpen ? 'is-open' : ''}`}>
+            {nav
+              .filter((n) => n.show)
+              .map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => {
+                    void navigate(n.id);
+                    setMenuOpen(false);
+                  }}
+                  className={page === n.id ? 'active' : ''}
+                  aria-current={page === n.id ? 'page' : undefined}
+                >
+                  {n.text}
+                </button>
+              ))}
+          </nav>
+        )}
       </header>
-      <div className="main-shell">
+      <div
+        className={`main-shell ${page === 'home' ? 'page-bg' : ''}`}
+        style={
+          page === 'home'
+            ? {
+                backgroundColor: isDarkMode ? '#0b0f17' : '#f8fafc',
+                backgroundImage: `radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, ${isDarkMode ? '0.2' : '0.12'}), transparent), radial-gradient(circle at 100% 100%, rgba(37, 99, 235, ${isDarkMode ? '0.1' : '0.08'}), transparent 40%), url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='${isDarkMode ? '0.05' : '0.04'}'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat, no-repeat, repeat',
+                minHeight: '100vh',
+                width: '100%',
+              }
+            : undefined
+        }
+      >
         {demo && ['employee', 'manager', 'methodologist', 'admin'].includes(user.id) && (
           <div className="demo-bar">
             <span>{t('text017')}</span>
@@ -419,7 +441,6 @@ export default function App() {
                   ) && <p className="empty-state">{t('home.noMatches')}</p>}
                 </>
               )}
-              {!selected && <Disclaimer />}
             </>
           )}
           {page === 'method' && (

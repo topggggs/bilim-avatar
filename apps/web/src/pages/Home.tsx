@@ -108,27 +108,7 @@ export default function Home({
           </section>
         </div>
       </div>
-      <div className="home-shortcuts">
-        <button onClick={onStart} disabled={!!p.result && !canStart && !hasDraft}>
-          <span>{t('home.test')}</span>
-          <span>{hasDraft ? t('home.continue') : t('home.questions')}</span>
-        </button>
-        <button onClick={() => onNavigate('profile')}>
-          <span>{t('home.profileLabel')}</span>
-          <span>{t('home.qualities')}</span>
-        </button>
-        <button onClick={() => onNavigate('route')}>
-          <span>{t('home.routeNav')}</span>
-          <span>Bilim → BuildEX → BIU</span>
-        </button>
-      </div>
       <section className="home-overview">
-        <div className="section-heading">
-          <h2>{t('home.yourProfile')}</h2>
-          <button className="text-button" onClick={() => onNavigate('profile')}>
-            {t('home.viewProfile')}
-          </button>
-        </div>
         <div className="home-quality-grid">
           {scaleIds.map((s) => (
             <article className="home-quality-card" key={s}>

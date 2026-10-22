@@ -63,7 +63,7 @@ export type Avatar = {
   attempts: number;
   fixed: boolean;
   error?: string;
-  /** Last time the owner saved a custom look; also busts the image cache. */
+  // Refreshes the image URL after customization.
   customizedAt?: string;
 };
 export type DevelopmentRecord = {

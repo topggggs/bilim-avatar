@@ -2,7 +2,7 @@ import { Check, ChevronDown, Globe, LogOut, Moon, Sun, UserRound } from 'lucide-
 import { useEffect, useId, useRef, useState, type FocusEvent } from 'react';
 import { languages, setLanguage, t, useLanguage } from './localization';
 import { setTheme, useTheme } from './theme';
-/** Pressed = dark. A stable label with aria-pressed reads correctly in both states. */
+// Keep a stable label; aria-pressed reports the dark state.
 export function ThemeToggle({ inMenu = false }: { inMenu?: boolean }) {
   const dark = useTheme() === 'dark';
   const label = t('header.darkTheme');
@@ -23,7 +23,7 @@ export function ThemeToggle({ inMenu = false }: { inMenu?: boolean }) {
     </button>
   );
 }
-/** Disclosure popover: closes on outside click, Escape (focus returns to the trigger) or tabbing out. */
+
 function usePopover() {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -150,7 +150,6 @@ export function UserMenu({
               {t('text006')}
             </button>
           )}
-          {/* Phones have no room for the header toggle, so it lives here (CSS shows it ≤640px). */}
           <ThemeToggle inMenu />
           <button
             className="user-logout"

@@ -23,7 +23,6 @@ export async function api<T = any>(url: string, method = 'GET', body?: unknown):
   const r = await fetch(`/api${url}`, {
     method,
     credentials: 'same-origin',
-    // The server picks the language of outgoing emails from this header.
     headers: {
       'Accept-Language': getLanguage(),
       ...(body ? { 'Content-Type': 'application/json' } : {}),

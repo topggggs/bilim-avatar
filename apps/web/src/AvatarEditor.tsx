@@ -18,7 +18,6 @@ const styleLabels: Record<Style, Key> = {
   calm: 'text161',
   tech: 'text162',
 };
-// Swatches mirror the colours drawn by the core renderer.
 const swatches: Record<string, string> = {
   bright: '#f07b47',
   strict: '#3d485c',

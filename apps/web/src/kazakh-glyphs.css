@@ -1,5 +1,4 @@
-/* Manrope has no Ә Ғ Қ Ң Ұ. Onest, the closest match, supplies only those glyphs so Kazakh text
-   never falls back to a system serif; everything else keeps rendering in Manrope. */
+/* Onest supplies Kazakh glyphs missing from Manrope. */
 @font-face {
   font-family: 'Manrope Kazakh';
   font-style: normal;

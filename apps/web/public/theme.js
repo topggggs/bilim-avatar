@@ -1,5 +1,4 @@
-// Runs before the stylesheet paints so a dark-theme visitor never sees a light flash. It is a
-// separate file because the CSP forbids inline scripts; src/theme.ts owns the theme afterwards.
+// Apply the theme before paint; CSP requires an external script.
 (function () {
   var theme = null;
   try {

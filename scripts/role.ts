@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { createStore, audit, type Role } from '../apps/api/src/store.js';
-// Trusted operator CLI for the first local admin; never exposed as a public API.
 const [identifier, role, managerId] = process.argv.slice(2);
 if (!identifier || !['employee', 'manager', 'methodologist', 'admin'].includes(role))
   throw Error('Usage: db:role -- <user ID, verified email or phone> <role> [manager ID]');

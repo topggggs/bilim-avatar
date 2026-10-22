@@ -16,7 +16,7 @@ if (!analyze) {
   process.exitCode = 2;
 } else {
   const config = configSchema.parse(seed);
-  // Synthetic work examples only. Never use employee answers for a connection check.
+  // Use synthetic examples for connection checks.
   const examples = [
     'До смены сверю план и допуски, осмотрю СИЗ. Если допуска нет, опасную работу не начну: сообщу руководителю и согласую безопасную задачу.',
     'Сверю размеры и отметки с актуальной версией чертежа, зафиксирую расхождения. До согласования с инженером спорный участок выполнять не буду.',

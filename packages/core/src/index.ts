@@ -29,7 +29,7 @@ export type AvatarConfig = Appearance & {
   archetype: Archetype;
   accessory: Scale;
   boosted: boolean;
-  /** Set once the person customizes the avatar; otherwise the variant preset is used. */
+
   look?: Look;
 };
 export const questionSchema = z

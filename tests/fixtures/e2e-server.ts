@@ -1,5 +1,3 @@
-// Isolated HTTP harness: synthetic accounts, file storage and a named provider fixture.
-// Production entry points never import this file or offer a mock analysis provider.
 import express from 'express';
 import path from 'node:path';
 import { createApp } from '../../apps/api/src/app';
